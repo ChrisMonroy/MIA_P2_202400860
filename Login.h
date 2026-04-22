@@ -19,7 +19,22 @@
 #include "Inodos.h"
 #include "globals.h"
 
-// Buscar partición montada por ID
+// ============================================================================
+// FUNCIÓN AUXILIAR: Limpieza de strings (elimina \0, espacios, etc.)
+// ============================================================================
+inline std::string cleanString(const std::string& str) {
+    std::string result;
+    for (char c : str) {
+        if (c != '\0' && c != '\n' && c != '\r' && c != ' ' && c != '\t') {
+            result += c;
+        }
+    }
+    return result;
+}
+
+// ============================================================================
+// FUNCIÓN AUXILIAR: Buscar partición montada por ID
+// ============================================================================
 MountedPartition* findMountedPartition(const std::string& id) {
     for (auto& mp : mounted_list) {
         if (mp.id == id) {
@@ -29,56 +44,99 @@ MountedPartition* findMountedPartition(const std::string& id) {
     return nullptr;
 }
 
-// Leer contenido de users.txt desde el disco
+// ============================================================================
+// FUNCIÓN AUXILIAR: Leer contenido de users.txt desde el disco
+// ============================================================================
 std::string readUsersTxt(std::fstream& file, const SuperBloque& sb) {
     std::string content = "";
     
-    // Leer inodo de users.txt (inodo 1)
+    // Leer inodo de users.txt (inodo 1, el inodo 0 es raíz)
     Inodos usersInode;
-    file.seekg(sb.s_inode_start + 1 * sizeof(Inodos), std::ios::beg);
-    file.read(reinterpret_cast<char*>(&usersInode), sizeof(Inodos));
+    file.seekg(sb.s_inode_start + 1 * sb.s_inode_s, std::ios::beg);
+    file.read(reinterpret_cast<char*>(&usersInode), sb.s_inode_s);
     
-    if (usersInode.i_type != '1') {
+    // Validar que sea un archivo ('0' = archivo, '1' = directorio)
+    if (usersInode.i_type != '0') {
         return "";
-}
+    }
     
-    // Leer bloques del archivo
+    // Leer bloques del archivo (solo bloques directos por simplicidad)
     for (int i = 0; i < 12 && usersInode.i_block[i] != -1; i++) {
         BloqueArchivos block;
-        file.seekg(sb.s_block_start + usersInode.i_block[i] * sizeof(BloqueArchivos), std::ios::beg);
-        file.read(reinterpret_cast<char*>(&block), sizeof(BloqueArchivos));
+        file.seekg(sb.s_block_start + usersInode.i_block[i] * sb.s_block_s, std::ios::beg);
+        file.read(reinterpret_cast<char*>(&block), sb.s_block_s);
         content += std::string(block.b_content);
     }
     
     return content;
 }
 
-// Buscar usuario en el contenido de users.txt
+// ============================================================================
+// FUNCIÓN AUXILIAR: Buscar usuario en el contenido de users.txt
+// Retorna: true si encuentra usuario y contraseña correctos, actualiza uid/gid
+// ============================================================================
 bool findUserInContent(const std::string& content, const std::string& username, 
                        const std::string& password, int& uid, int& gid) {
     std::istringstream stream(content);
     std::string line;
     
-    while (std::getline(stream, line)) {
-        // Trim de la línea completa (incluye \0)
-        while (!line.empty() && (line.back() == '\n' || line.back() == '\r' || 
-               line.back() == ' ' || line.back() == '\t' || line.back() == '\0')) {
-            line.pop_back();
+    // Primero pass: buscar el grupo del usuario para obtener su GID
+    std::string userGroupName = "";
+    {
+        std::istringstream tempStream(content);
+        std::string tempLine;
+        while (std::getline(tempStream, tempLine)) {
+            tempLine = cleanString(tempLine);
+            if (tempLine.empty()) continue;
+            
+            std::vector<std::string> fields;
+            std::string field;
+            std::istringstream lineStream(tempLine);
+            while (std::getline(lineStream, field, ',')) {
+                field = cleanString(field);
+                fields.push_back(field);
+            }
+            
+            if (fields.size() >= 5 && fields[1] == "U" && fields[3] == username) {
+                userGroupName = fields[4];  // Nombre del grupo del usuario
+                break;
+            }
         }
-        
+    }
+    
+    // Segundo pass: buscar el GID del grupo
+    if (!userGroupName.empty()) {
+        std::istringstream tempStream(content);
+        std::string tempLine;
+        while (std::getline(tempStream, tempLine)) {
+            tempLine = cleanString(tempLine);
+            if (tempLine.empty()) continue;
+            
+            std::vector<std::string> fields;
+            std::string field;
+            std::istringstream lineStream(tempLine);
+            while (std::getline(lineStream, field, ',')) {
+                field = cleanString(field);
+                fields.push_back(field);
+            }
+            
+            if (fields.size() >= 3 && fields[1] == "G" && fields[2] == userGroupName) {
+                gid = std::atoi(fields[0].c_str());
+                break;
+            }
+        }
+    }
+    
+    // Tercer pass: validar usuario y contraseña
+    while (std::getline(stream, line)) {
+        line = cleanString(line);
         if (line.empty()) continue;
         
-        // Parsear campos separados por coma
         std::vector<std::string> fields;
         std::string field;
         std::istringstream lineStream(line);
-        
         while (std::getline(lineStream, field, ',')) {
-            // Trim de cada campo (incluye \0)
-            while (!field.empty() && (field.back() == '\n' || field.back() == '\r' || 
-                   field.back() == ' ' || field.back() == '\t' || field.back() == '\0')) {
-                field.pop_back();
-            }
+            field = cleanString(field);
             fields.push_back(field);
         }
         
@@ -88,42 +146,34 @@ bool findUserInContent(const std::string& content, const std::string& username,
         std::string type = fields[1];
         std::string name = fields[2];
         
+        // Saltar registros eliminados (id == 0)
         if (id == 0) continue;
         
-        // Grupo: ID,G,Nombre
-        if (type == "G" && name == username) {
-            gid = id;
-        }
-        // Usuario: ID,U,Nombre,Password,Grupo
-        else if (type == "U" && fields.size() >= 5 && name == username) {
+        // Buscar usuario: ID,U,Nombre,Password,Grupo
+        if (type == "U" && fields.size() >= 5 && name == username) {
             uid = id;
             std::string storedPass = fields[3];
             
-            // Debug temporal
-            std::cerr << "DEBUG: storedPass=[" << storedPass << "] password=[" << password << "]" << std::endl;
-            
-            if (type == "U" && fields.size() >= 5 && name == username) {
-            uid = id;
-            std::string storedPass = fields[3];
-    
             if (storedPass == password) {
-                return true;
+                return true;  // ✅ Login exitoso
             }
-        }
-            return false;
+            return false;  // ❌ Contraseña incorrecta
         }
     }
     
-    return false;
+    return false;  // ❌ Usuario no encontrado
 }
 
+// ============================================================================
+// FUNCIÓN PRINCIPAL: Login
+// ============================================================================
 std::string Login(const std::string& input) {
     try {
+        // 1️⃣ Parsear parámetros del comando
         std::string user = "";
         std::string pass = "";
         std::string id = "";
         
-
         size_t start = 0;
         while (start < input.length()) {
             size_t space = input.find(' ', start);
@@ -154,72 +204,85 @@ std::string Login(const std::string& input) {
             start = space + 1;
         }
         
-
+        // Validar parámetros obligatorios
         if (user.empty() || pass.empty() || id.empty()) {
             return "Error: -user, -pass y -id son obligatorios para login";
         }
         
-
+        // 2️⃣ Verificar que no haya sesión activa
         if (is_logged) {
             return "Error: Ya existe una sesión activa. Use logout primero";
         }
         
-
+        // 3️⃣ Buscar la partición montada por ID
         MountedPartition* mp = findMountedPartition(id);
         if (!mp) {
             return "Error: Partición con ID " + id + " no está montada";
         }
         
-
+        // 4️⃣ Abrir el archivo del disco
         std::fstream file(mp->path, std::ios::binary | std::ios::in | std::ios::out);
         if (!file.is_open()) {
             return "Error: No se pudo abrir el disco";
         }
-
+        
+        // 5️⃣ Leer MBR para obtener inicio de partición
         MBR mbr;
         file.seekg(0, std::ios::beg);
         file.read(reinterpret_cast<char*>(&mbr), sizeof(MBR));
         
         Partition& part = mbr.mbr_partitions[mp->partition_index];
         long partStart = part.part_start;
-
+        
+        // 6️⃣ Leer SuperBloque
         SuperBloque sb;
         file.seekg(partStart, std::ios::beg);
         file.read(reinterpret_cast<char*>(&sb), sizeof(SuperBloque));
         
-
+        // 7️⃣ Leer contenido de users.txt
         std::string usersContent = readUsersTxt(file, sb);
-
-
-std::cerr << "\n DEBUG LOGIN " << std::endl;
-std::cerr << "usersContent: [" << usersContent << "]" << std::endl;
-std::cerr << "Username: [" << user << "]" << std::endl;
-std::cerr << "Password: [" << pass << "]" << std::endl;
-
-        
         if (usersContent.empty()) {
             file.close();
             return "Error: No se pudo leer el archivo users.txt";
         }
         
-        
+        // 8️⃣ Buscar y validar usuario
         int uid = -1, gid = -1;
         bool found = findUserInContent(usersContent, user, pass, uid, gid);
         
         if (!found) {
             file.close();
-            return "Error: Usuario o contraseña incorrectos";
+            // Determinar mensaje de error más específico
+            std::istringstream stream(usersContent);
+            std::string line;
+            bool userExists = false;
+            while (std::getline(stream, line)) {
+                line = cleanString(line);
+                if (line.empty()) continue;
+                std::vector<std::string> fields;
+                std::string field;
+                std::istringstream lineStream(line);
+                while (std::getline(lineStream, field, ',')) {
+                    field = cleanString(field);
+                    fields.push_back(field);
+                }
+                if (fields.size() >= 4 && fields[1] == "U" && fields[3] == user) {
+                    userExists = true;
+                    break;
+                }
+            }
+            return userExists ? "Error: Contraseña incorrecta para el usuario '" + user + "'" 
+                              : "Error: El usuario '" + user + "' no existe";
         }
         
-
+        // 9️⃣ Actualizar SuperBloque (mtime y mount count)
         sb.s_mtime = time(nullptr);
         sb.s_mnt_count++;
-        
         file.seekp(partStart, std::ios::beg);
         file.write(reinterpret_cast<char*>(&sb), sizeof(SuperBloque));
         file.close();
         
-
+        // 🔥 ACTUALIZAR VARIABLES DE SESIÓN (compatibilidad legacy)
         strncpy(current_user, user.c_str(), 15);
         current_user[15] = '\0';
         is_logged = true;
@@ -229,11 +292,14 @@ std::cerr << "Password: [" << pass << "]" << std::endl;
         session_partition_path = mp->path;
         session_partition_index = mp->partition_index;
         
+        // 🔥 ACTUALIZAR usuarioActual (fuente de verdad para Chmod/Copy/Move)
+        // Esto soluciona el error "Solo root puede ejecutar chmod"
+        usuarioActual.nombre = user;
         usuarioActual.uid = uid;
         usuarioActual.gid = gid;
-        usuarioActual.nombre = user;
         usuarioActual.particionId = id;
-
+        
+        // 🔟 Generar respuesta exitosa
         std::ostringstream result;
         result << "----- LOGIN -----\n";
         result << "Sesión iniciada exitosamente\n";
@@ -249,20 +315,40 @@ std::cerr << "Password: [" << pass << "]" << std::endl;
     }
 }
 
-// Obtener ruta de partición de la sesión actual
-std::string getSessionPartitionPath() {
-    return session_partition_path;
+// ============================================================================
+// FUNCIONES DE ACCESO A SESIÓN (compatibilidad con otros módulos)
+// ============================================================================
+
+inline bool hasActiveSession() {
+    return is_logged && !session_partition_id.empty();
 }
 
-// Obtener índice de partición de la sesión actual
-int getSessionPartitionIndex() {
-    return session_partition_index;
+inline int getSessionUID() {
+    return is_logged ? session_uid : -1;
 }
 
-// Obtener nombre de usuario actual
-std::string getCurrentUserName() {
-    return std::string(current_user);
+inline int getSessionGID() {
+    return is_logged ? session_gid : -1;
 }
 
+inline std::string getSessionPartitionId() {
+    return is_logged ? session_partition_id : "";
+}
+
+inline std::string getSessionPartitionPath() {
+    return is_logged ? session_partition_path : "";
+}
+
+inline int getSessionPartitionIndex() {
+    return is_logged ? session_partition_index : -1;
+}
+
+inline bool isRootUser() {
+    return is_logged && (session_uid == 1 || std::string(current_user) == "root");
+}
+
+inline std::string getCurrentUserName() {
+    return is_logged ? std::string(current_user) : "";
+}
 
 #endif

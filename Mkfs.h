@@ -20,16 +20,13 @@
 #include "Inodos.h"
 #include "utils.h"
 #include "globals.h"
-#include "Journal.h"
-#include "Journaling.h"
-#include "Login.h"
+
 
 // COMANDO MKFS
 std::string Mkfs(const std::string& input) {
     try {
         std::string id;
         std::string type = "full";  // Por defecto
-        std::string fs = "2fs"; //Por defercto usamos el EXT2
         
         // PARSEO DE PARÁMETROS
 
@@ -52,12 +49,6 @@ std::string Mkfs(const std::string& input) {
                     type = type.substr(1, type.size() - 2);
                 }
             }
-            else if (token.find("-fs=") == 0) {
-            fs = token.substr(4);
-            if (fs.size() >= 2 && fs.front() == '"' && fs.back() == '"') {
-                fs = fs.substr(1, fs.size() - 2);
-            }
-            }
             
             if (space == std::string::npos) break;
             start = space + 1;
@@ -72,16 +63,6 @@ std::string Mkfs(const std::string& input) {
         std::string formatType = toLowerCase(type);
         if (formatType != "full" && !formatType.empty()) {
             return "Error: type debe ser 'full'";
-        }
-
-        int fsType = 2;  // Default EXT2
-        std::string fsLower = toLowerCase(fs);
-        if (fsLower == "2fs") {
-            fsType = 2;
-        } else if (fsLower == "3fs") {
-            fsType = 3;
-        } else {
-            return "Error: -fs debe ser '2fs' o '3fs'";
         }
         
         // BUSCAR PARTICIÓN MONTADA
@@ -111,18 +92,17 @@ std::string Mkfs(const std::string& input) {
         Partition& part = mbr.mbr_partitions[target->partition_index];
         long partStart = part.part_start;
         long partSize = part.part_size;
-        long superSize = sizeof(SuperBloque);
-        long inodeSize = sizeof(Inodos);
-        long blockSize = 64;
         
-        long denominator, numerator;
-        if (fsType == 3) {
-            denominator = 50 + 4 + inodeSize + 3 * blockSize;
-        } else {
-            denominator = 4 + inodeSize + 3 * blockSize;
-        }
-        numerator = partSize - superSize;
-        long n = numerator / denominator;  
+        long superSize = sizeof(SuperBloque);
+        long inodeSize = sizeof(Inodos);      
+        long blockSize = 64;                   
+        long bitmapInodeSize = 1;              
+        long bitmapBlockSize = 1;              
+        
+
+        long denominator = 4 + inodeSize + 3 * blockSize;
+        long numerator = partSize - superSize;
+        long n = numerator / denominator;
         
         if (n < 2) {
             return "Error: La partición es muy pequeña para crear un sistema de archivos (mínimo 2 inodos)";
@@ -130,27 +110,18 @@ std::string Mkfs(const std::string& input) {
         
 
         // Bitmap se calcula en bits, pero se escribe en bytes
-
-        long bmInodeBytes = (n + 7) / 8;
-        long bmBlockBytes = (3 * n + 7) / 8;
-
-        long currentPos = partStart + superSize;
-
-        long journalStart = -1;
-        if (fsType == 3) {
-            journalStart = currentPos;
-        currentPos += n * 50;
-        }
-
-        long bmInodeStart = currentPos;
+        long bmInodeBytes = (n + 7) / 8;      
+        long bmBlockBytes = (3 * n + 7) / 8;   
+        
+        long bmInodeStart = partStart + superSize;
         long bmBlockStart = bmInodeStart + bmInodeBytes;
         long inodeTableStart = bmBlockStart + bmBlockBytes;
         long blockTableStart = inodeTableStart + (n * inodeSize);
         
         SuperBloque sb;
-        memset(&sb, 0, sb.s_block_s);
-
-        sb.s_filesystem_type = fsType;             
+        memset(&sb, 0, sizeof(SuperBloque));
+        
+        sb.s_filesystem_type = 2;              
         sb.s_inodes_count = static_cast<int>(n);
         sb.s_blocks_count = static_cast<int>(3 * n);  
         sb.s_free_blocks_count = static_cast<int>(3 * n) - 2;  
@@ -175,21 +146,7 @@ std::string Mkfs(const std::string& input) {
         }
         
         file.seekp(partStart, std::ios::beg);
-        file.write(reinterpret_cast<char*>(&sb), sb.s_block_s);
-
-        if (fsType == 3) {
-            for (int i = 0; i < n; i++) {
-                Journal journal;
-                strcpy(journal.operacion, "INIT");
-                strcpy(journal.ruta, "/");
-                strcpy(journal.contenido, "Sistema EXT3 inicializado");
-                journal.fecha = time(nullptr);
-                journal.siguiente = (i < n - 1) ? (journalStart + (i + 1) * 50) : -1;
-        
-                file.seekp(journalStart + i * 50, std::ios::beg);
-                file.write(reinterpret_cast<char*>(&journal), 50);
-            }
-        }
+        file.write(reinterpret_cast<char*>(&sb), sizeof(SuperBloque));
         
         char zero = 0;
         
@@ -217,7 +174,7 @@ std::string Mkfs(const std::string& input) {
         }
         
         Inodos rootInode;
-        memset(&rootInode, 0, sb.s_inode_s);
+        memset(&rootInode, 0, sizeof(Inodos));
         
         rootInode.i_uid = 1;
         rootInode.i_gid = 1;
@@ -235,11 +192,11 @@ std::string Mkfs(const std::string& input) {
         rootInode.i_block[0] = 0; 
         
         file.seekp(inodeTableStart, std::ios::beg);
-        file.write(reinterpret_cast<char*>(&rootInode), sb.s_inode_s);
+        file.write(reinterpret_cast<char*>(&rootInode), sizeof(Inodos));
         
 
         BloqueCarpeta rootBlock;
-        memset(&rootBlock, 0, sb.s_block_s);
+        memset(&rootBlock, 0, sizeof(BloqueCarpeta));
         
         // Entrada (directorio actual)
         strncpy(rootBlock.b_content[0].b_name, ".", 12);
@@ -256,10 +213,10 @@ std::string Mkfs(const std::string& input) {
         rootBlock.b_content[3].b_inodo = -1;
         
         file.seekp(blockTableStart, std::ios::beg);
-        file.write(reinterpret_cast<char*>(&rootBlock), sb.s_block_s);
+        file.write(reinterpret_cast<char*>(&rootBlock), sizeof(BloqueCarpeta));
         
         Inodos usersInode;
-        memset(&usersInode, 0, sb.s_inode_s);
+        memset(&usersInode, 0, sizeof(Inodos));
         
         const char* usersContent = "1,G,root\n1,U,root,123,root\n";
         int contentLen = strlen(usersContent);
@@ -278,16 +235,16 @@ std::string Mkfs(const std::string& input) {
         }
         usersInode.i_block[0] = 1;  // Apunta al bloque 1 
         
-        file.seekp(inodeTableStart + sb.s_inode_s, std::ios::beg);
-        file.write(reinterpret_cast<char*>(&usersInode), sb.s_inode_s);
+        file.seekp(inodeTableStart + sizeof(Inodos), std::ios::beg);
+        file.write(reinterpret_cast<char*>(&usersInode), sizeof(Inodos));
         
 
         BloqueArchivos block;
-        memset(&block, 0, sb.s_block_s);
+        memset(&block, 0, sizeof(BloqueArchivos));
         strncpy(block.b_content, usersContent, contentLen);
         
-        file.seekp(blockTableStart + sb.s_block_s, std::ios::beg);
-        file.write(reinterpret_cast<char*>(&block), sb.s_block_s);
+        file.seekp(blockTableStart + sizeof(BloqueCarpeta), std::ios::beg);
+        file.write(reinterpret_cast<char*>(&block), sizeof(BloqueArchivos));
         
         // Bitmap: 0 = libre, 1 = ocupado
         char bitmapByte = 0;
@@ -311,21 +268,10 @@ std::string Mkfs(const std::string& input) {
             mbrUpdate.write(reinterpret_cast<char*>(&mbr2), sizeof(MBR));
             mbrUpdate.close();
         }
-
-        // Después de formatear exitosamente:
-        std::string partitionId = getSessionPartitionId();
-        if (!partitionId.empty()) {
-        CommandJournaling::add(
-        partitionId,
-        "FORMAT",
-        "Partición " + id,
-        "Tipo: " + std::to_string(fsType) + ", FS: " + (fsType == 3 ? "EXT3" : "EXT2")
-    );
-}
         
         std::ostringstream result;
         result << "----- MKFS -----\n";
-        result << "Sistema de archivos EXT" << fsType << " creado exitosamente\n";
+        result << "Sistema de archivos EXT2 creado exitosamente\n";
         result << "  ID: " << id << "\n";
         result << "  Disco: " << target->path << "\n";
         result << "  Partición: " << target->name << "\n";
@@ -335,10 +281,6 @@ std::string Mkfs(const std::string& input) {
         result << "  Inodos libres: " << (n - 2) << "\n";
         result << "  Bloques libres: " << (3 * n - 2) << "\n";
         result << "  Archivo users.txt creado en la raíz";
-        if (fsType == 3) {
-            result << "  Journal Start: " << journalStart << "\n";
-            result << "  Journal Count: " << n << "\n";
-        }
         
         return result.str();
         

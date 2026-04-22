@@ -16,7 +16,6 @@
 #include "Inodos.h"
 #include "Login.h"
 #include "globals.h"
-#include "Journaling.h"
 
 std::string Mkgrp(const std::string& input){
     try {
@@ -183,16 +182,6 @@ std::string Mkgrp(const std::string& input){
         file.write(reinterpret_cast<char*>(&sb), sizeof(SuperBloque));
         
         file.close();
-
-        // Después de crear el grupo:
-        if (!partitionId.empty()) {
-        CommandJournaling::add(
-        partitionId,
-        "CREATE_GROUP",
-        "/users.txt",
-        "Grupo: " + name + ", GID: " + std::to_string(newGid)
-    );
-}
 
         //Retornamos que fue un exito
         std::ostringstream result;

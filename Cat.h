@@ -42,26 +42,20 @@ bool hasReadPermission(const std::string& perm, int fileUid, int fileGid) {
 int findEntryInDirectory(std::fstream& file, const SuperBloque& sb, 
                          int dirInodeIndex, const std::string& name) {
     
-    std::cerr << "[DEBUG] Buscando '" << name << "' en directorio inodo " << dirInodeIndex << std::endl;
-    
+    // Leer inodo del directorio
     Inodos dirInode;
-    file.seekg(sb.s_inode_start + dirInodeIndex * sb.s_inode_s, std::ios::beg);
-    file.read(reinterpret_cast<char*>(&dirInode), sb.s_inode_s);
-    
-    std::cerr << "[DEBUG] i_type=" << (int)dirInode.i_type 
-              << ", i_block[0]=" << dirInode.i_block[0] << std::endl;
+    file.seekg(sb.s_inode_start + dirInodeIndex * sizeof(Inodos), std::ios::beg);
+    file.read(reinterpret_cast<char*>(&dirInode), sizeof(Inodos));
     
     if (dirInode.i_type != '1') {
-        std::cerr << "[DEBUG] No es directorio, retornando -1" << std::endl;
-        return -1;
+        return -1;  // No es directorio
     }
     
+    // Buscar en TODOS los bloques directos del directorio
     for (int b = 0; b < 12 && dirInode.i_block[b] != -1; b++) {
-        std::cerr << "[DEBUG] Leyendo bloque " << dirInode.i_block[b] << std::endl;
-        
         BloqueCarpeta dirBlock;
-        file.seekg(sb.s_block_start + dirInode.i_block[b] * sb.s_block_s, std::ios::beg);
-        file.read(reinterpret_cast<char*>(&dirBlock), sb.s_block_s);
+        file.seekg(sb.s_block_start + dirInode.i_block[b] * sizeof(BloqueCarpeta), std::ios::beg);
+        file.read(reinterpret_cast<char*>(&dirBlock), sizeof(BloqueCarpeta));
         
         for (int j = 0; j < 4; j++) {
             if (dirBlock.b_content[j].b_inodo == -1) continue;
@@ -69,18 +63,13 @@ int findEntryInDirectory(std::fstream& file, const SuperBloque& sb,
             std::string entryName = dirBlock.b_content[j].b_name;
             entryName.erase(std::remove(entryName.begin(), entryName.end(), '\0'), entryName.end());
             
-            std::cerr << "[DEBUG] Entrada[" << j << "]: '" << entryName << "' -> inodo " 
-                      << dirBlock.b_content[j].b_inodo << std::endl;
-            
             if (entryName == name) {
-                std::cerr << "[DEBUG] ¡ENCONTRADO!" << std::endl;
                 return dirBlock.b_content[j].b_inodo;
             }
         }
     }
     
-    std::cerr << "[DEBUG] No encontrado :(" << std::endl;
-    return -1;
+    return -1;  // No encontrado
 }
 
 // Buscar inodo por ruta
@@ -93,7 +82,7 @@ bool findInodeByPath(std::fstream& file, const SuperBloque& sb,
     if (cleanPath.empty() || cleanPath == "/") {
         inodeIndex = 0;
         file.seekg(sb.s_inode_start, std::ios::beg);
-        file.read(reinterpret_cast<char*>(&inode), sb.s_inode_s);
+        file.read(reinterpret_cast<char*>(&inode), sizeof(Inodos));
         return true;
     }
     
@@ -131,8 +120,8 @@ bool findInodeByPath(std::fstream& file, const SuperBloque& sb,
         // Verificar que sea directorio (si no es la última parte)
         if (i < parts.size() - 1) {
             Inodos nextInode;
-            file.seekg(sb.s_inode_start + foundInode * sb.s_inode_s, std::ios::beg);
-            file.read(reinterpret_cast<char*>(&nextInode), sb.s_inode_s);
+            file.seekg(sb.s_inode_start + foundInode * sizeof(Inodos), std::ios::beg);
+            file.read(reinterpret_cast<char*>(&nextInode), sizeof(Inodos));
             
             if (nextInode.i_type != '1') {
                 return false;  // No es directorio
@@ -144,8 +133,8 @@ bool findInodeByPath(std::fstream& file, const SuperBloque& sb,
     
     // Obtener inodo final
     inodeIndex = currentInodeIndex;
-    file.seekg(sb.s_inode_start + inodeIndex * sb.s_inode_s, std::ios::beg);
-    file.read(reinterpret_cast<char*>(&inode), sb.s_inode_s);
+    file.seekg(sb.s_inode_start + inodeIndex * sizeof(Inodos), std::ios::beg);
+    file.read(reinterpret_cast<char*>(&inode), sizeof(Inodos));
     
     return true;
 }

@@ -18,7 +18,6 @@
 #include "Inodos.h"
 #include "Login.h"
 #include "globals.h"
-#include "Journaling.h"
 
 std::string Rmusr(const std::string& input) {
     try {
@@ -200,17 +199,6 @@ std::string Rmusr(const std::string& input) {
         file.write(reinterpret_cast<char*>(&sb), sizeof(SuperBloque));
         
         file.close();
-
-        // Después de eliminar el usuario:
-        std::string partitionId = getSessionPartitionId();
-        if (!partitionId.empty()) {
-        CommandJournaling::add(
-        partitionId,
-        "DELETE_USER",
-        "/users.txt",
-        "Usuario eliminado: " + user
-    );
-}
         
         std::ostringstream result;
         result << "----- RMUSR -----\n";

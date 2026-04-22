@@ -63,7 +63,6 @@ int buscarInodoPorRuta2(std::fstream& file, const SuperBloque& sb,
                        const std::string& ruta, int inodoActual) {
     if (ruta == "/" || ruta.empty()) return 0;
     
-    // Normalizar ruta
     std::string cleanPath = ruta;
     while (cleanPath.find("//") != std::string::npos) {
         cleanPath.replace(cleanPath.find("//"), 2, "/");
@@ -72,7 +71,6 @@ int buscarInodoPorRuta2(std::fstream& file, const SuperBloque& sb,
         cleanPath.pop_back();
     }
     
-    // Dividir en componentes
     std::vector<std::string> componentes;
     size_t start = (cleanPath[0] == '/') ? 1 : 0;
     while (start < cleanPath.size()) {
@@ -92,19 +90,24 @@ int buscarInodoPorRuta2(std::fstream& file, const SuperBloque& sb,
         file.seekg(sb.s_inode_start + inodoPadre * sb.s_inode_s, std::ios::beg);
         file.read(reinterpret_cast<char*>(&inodePadre), sb.s_inode_s);
         
-        if (inodePadre.i_type != '0') return -1;  // No es carpeta
+        // ✅ Directorio = '1'
+        if (inodePadre.i_type != '1') return -1;
         
         bool encontrado = false;
         for (int i = 0; i < 12 && inodePadre.i_block[i] != -1; i++) {
             int idxBloque = inodePadre.i_block[i];
-            
             BloqueCarpeta bloque;
             file.seekg(sb.s_block_start + idxBloque * sb.s_block_s, std::ios::beg);
             file.read(reinterpret_cast<char*>(&bloque), sb.s_block_s);
             
             for (int j = 0; j < 4; j++) {
-                if (bloque.b_content[j].b_inodo != -1 && 
-                    strcmp(bloque.b_content[j].b_name, nombre.c_str()) == 0) {
+                if (bloque.b_content[j].b_inodo == -1) continue;
+                
+                // ✅ Comparación segura con std::string
+                std::string nombreEnBloque(bloque.b_content[j].b_name);
+                nombreEnBloque = nombreEnBloque.substr(0, nombreEnBloque.find('\0'));
+                
+                if (nombreEnBloque == nombre) {  // ✅ COMPARACIÓN REAL
                     inodoPadre = bloque.b_content[j].b_inodo;
                     encontrado = true;
                     break;
@@ -177,43 +180,34 @@ inline std::string Rename(const std::string& input) {
             return "Error: Partición no montada";
         }
         
-        // Abrir disco
         std::fstream file(target->path, std::ios::binary | std::ios::in | std::ios::out);
         if (!file.is_open()) {
             return "Error: No se pudo abrir el disco";
         }
         
-        // Leer SuperBloque
         SuperBloque sb;
         std::ifstream mbrFile(target->path, std::ios::binary);
-        if (!mbrFile.is_open()) {
-            file.close();
-            return "Error: No se pudo abrir el disco para leer MBR";
-        }
         MBR mbr;
         mbrFile.read(reinterpret_cast<char*>(&mbr), sizeof(MBR));
         mbrFile.close();
 
-        // Obtener el start desde la tabla de particiones
         long particionStart = mbr.mbr_partitions[target->partition_index].part_start;
         file.seekg(particionStart, std::ios::beg);
         file.read(reinterpret_cast<char*>(&sb), sizeof(SuperBloque));
         
-        // Buscar inodo del target
-        int inodoTarget = buscarInodoPorRuta2(file, sb, params.path, 0);
+        // ✅ Usar la función corregida de utils.h
+        int inodoTarget = buscarInodoPorRuta(file, sb, params.path, 0);
         if (inodoTarget == -1) {
             file.close();
             return "Error: No existe la ruta: " + params.path;
         }
         
-        // Obtener información del padre
         PathInfo info = obtenerInfoPadre(file, sb, params.path);
-        if (info.inodoPadre == -1) {
+        if (info.inodoPadre == -1 || info.idxBloquePadre == -1) {
             file.close();
             return "Error: No se pudo obtener información del padre";
         }
         
-        // Verificar permisos de escritura en el target
         Inodos inodeTarget;
         file.seekg(sb.s_inode_start + inodoTarget * sb.s_inode_s, std::ios::beg);
         file.read(reinterpret_cast<char*>(&inodeTarget), sb.s_inode_s);
@@ -223,43 +217,36 @@ inline std::string Rename(const std::string& input) {
             return "Error: No tiene permisos de escritura para renombrar: " + params.path;
         }
         
-        // Leer el bloque carpeta del padre
         BloqueCarpeta bloquePadre;
         file.seekg(sb.s_block_start + info.idxBloquePadre * sb.s_block_s, std::ios::beg);
         file.read(reinterpret_cast<char*>(&bloquePadre), sb.s_block_s);
         
-        // Actualizar el nombre en la entrada correspondiente
+        // ✅ Actualizar nombre con null-termination segura
         memset(bloquePadre.b_content[info.idxEntrada].b_name, 0, 12);
         strncpy(bloquePadre.b_content[info.idxEntrada].b_name, params.name.c_str(), 11);
+        bloquePadre.b_content[info.idxEntrada].b_name[11] = '\0';
         
-        // Escribir el bloque actualizado
         file.seekp(sb.s_block_start + info.idxBloquePadre * sb.s_block_s, std::ios::beg);
         file.write(reinterpret_cast<char*>(&bloquePadre), sb.s_block_s);
         
-        // Actualizar i_mtime del inodo target
         inodeTarget.i_mtime = time(nullptr);
         file.seekp(sb.s_inode_start + inodoTarget * sb.s_inode_s, std::ios::beg);
         file.write(reinterpret_cast<char*>(&inodeTarget), sb.s_inode_s);
         
-        // Registrar en Journal si es EXT3
+        file.flush();  // ✅ Forzar escritura
+        
         std::string nuevaRuta = getParentPath(params.path) + "/" + params.name;
         registrarJournalRename(file, sb, params.path.c_str(), nuevaRuta.c_str());
         
         file.close();
 
-        // Después de renombrar exitosamente:
         if (!partitionId.empty()) {
-        CommandJournaling::add(
-        partitionId,
-        "RENAME",
-        nuevaRuta,
-        "Antes: " + info.nombreActual
-    );
-}
+            CommandJournaling::add(partitionId, "RENAME", nuevaRuta, "Antes: " + info.nombreActual);
+        }
         
         return std::string("Archivo/Carpeta renombrado exitosamente:\n") +
-       "  De: " + params.path + "\n" +
-       "  A: " + params.name;
+               "  De: " + params.path + "\n" +
+               "  A: " + params.name;
         
     } catch (const std::exception& e) {
         return std::string("Error en rename: ") + e.what();

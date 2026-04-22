@@ -12,7 +12,6 @@
 #include "Mount.h"
 #include "Login.h"
 #include "globals.h"
-#include "Journaling.h"
 
 //Comando
 std::string Mkusr(const std::string& input) {
@@ -314,17 +313,6 @@ file.write(reinterpret_cast<char*>(&sb), sizeof(SuperBloque));
         file.write(reinterpret_cast<char*>(&sb), sizeof(SuperBloque));
         
         file.close();
-
-        // Después de crear el usuario:
-        std::string partitionId = getSessionPartitionId();
-        if (!partitionId.empty()) {
-        CommandJournaling::add(
-        partitionId,
-        "CREATE_USER",
-        "/users.txt",
-        "Usuario: " + user + ", GID: " + std::to_string(groupGid)
-    );
-}
         
         //Mensaje de éxito
         std::ostringstream result;

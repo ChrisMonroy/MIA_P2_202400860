@@ -56,7 +56,7 @@ inline std::string ejecutarLoss(const std::string& input) {
     
     SuperBloque sb;
     file.seekg(particionStart);
-    file.read(reinterpret_cast<char*>(&sb), sizeof(SuperBloque));
+    file.read(reinterpret_cast<char*>(&sb), sb.s_block_s);
 
     // 5. Validar EXT3
     if (sb.s_filesystem_type != 3) {

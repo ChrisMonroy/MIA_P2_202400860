@@ -6,7 +6,7 @@
 #include <ctime>
 
 struct SuperBloque {
-    int s_filesystem_type; //El 2 EXT2 y 3 EXT3
+    int s_filesystem_type;
     int s_inodes_count;
     int s_blocks_count;
     int s_free_blocks_count;
@@ -23,7 +23,5 @@ struct SuperBloque {
     int s_bm_block_start;
     int s_inode_start;
     int s_block_start;
-    int s_journal_start;
-    int s_journal_count;  
 };
 #endif

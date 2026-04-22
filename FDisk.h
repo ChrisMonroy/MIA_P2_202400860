@@ -21,10 +21,7 @@ struct FdiskParams {
     std::string type = "P";
     std::string fit = "WF";
     std::string name = "";
-    std::string deleteMode = ""; //Puede ser fast o Full
-    int addSize = 0;
-    bool hasAdd = false;
-    bool hasDelete = false;
+    std::string deleteName = "";
 };
 
 FdiskParams parseFdiskCommand(const std::string& input) {
@@ -65,14 +62,9 @@ FdiskParams parseFdiskCommand(const std::string& input) {
             }
         }
         else if (token.find("-delete=") == 0) {
-            params.deleteMode = token.substr(8);
-            params.hasDelete = true;
+            params.deleteName = token.substr(8);
         }
-        else if (token.find("-add=") == 0) {
-            params.addSize = std::atoi(token.substr(5).c_str());
-            params.hasAdd = true;
-        }
-
+        
         if (space == std::string::npos) break;
         start = space + 1;
     }
@@ -381,8 +373,7 @@ std::string createLogical(const std::string& path, long long size,
 }
 
 // Eliminar partición
-std::string deletePartition(const std::string& path, const std::string& name, 
-                           const std::string& mode) {
+std::string deletePartition(const std::string& path, const std::string& name) {
     std::fstream diskFile(path, std::ios::binary | std::ios::in | std::ios::out);
     if (!diskFile.is_open()) {
         return "Error: No se pudo abrir el disco";
@@ -407,135 +398,21 @@ std::string deletePartition(const std::string& path, const std::string& name,
         return "Error: No existe una partición con ese nombre";
     }
 
-    Partition& target = mbr.mbr_partitions[foundIndex];
-    
-    // Si es extendida, eliminar primero todas las lógicas
-    if (target.part_type == 'E') {
-        int extStart = target.part_start;
-        int extEnd = target.part_start + target.part_size;
-        
-        // Recorrer cadena de EBRs y marcar como eliminados
-        int currentEBRPos = extStart;
-        while (currentEBRPos != -1 && currentEBRPos < extEnd) {
-            EBR ebr;
-            diskFile.seekg(currentEBRPos, std::ios::beg);
-            diskFile.read(reinterpret_cast<char*>(&ebr), sizeof(EBR));
-            
-            if (ebr.part_status == '1') {
-                // Limpiar espacio de la lógica si es mode=full
-                if (mode == "full") {
-                    diskFile.seekp(ebr.part_start, std::ios::beg);
-                    std::vector<char> zeros(ebr.part_size, 0);
-                    diskFile.write(zeros.data(), ebr.part_size);
-                }
-                // Marcar EBR como vacío
-                ebr.part_status = '0';
-                memset(ebr.part_name, 0, 16);
-                diskFile.seekp(currentEBRPos, std::ios::beg);
-                diskFile.write(reinterpret_cast<char*>(&ebr), sizeof(EBR));
-            }
-            currentEBRPos = ebr.part_next;
-        }
-    }
-
-    // Eliminar la partición del MBR
-    target.part_status = '0';
-    memset(target.part_name, 0, 16);
-    target.part_correlative = 0; 
-    memset(target.part_id, 0, 4);
-
-    // Si es mode=full, limpiar el espacio en disco
-    if (mode == "full") {
-        diskFile.seekp(target.part_start, std::ios::beg);
-        std::vector<char> zeros(target.part_size, 0);
-        diskFile.write(zeros.data(), target.part_size);
-    }
-
-    // Escribir MBR actualizado
-    diskFile.seekp(0, std::ios::beg);
-    diskFile.write(reinterpret_cast<char*>(&mbr), sizeof(MBR));
-    diskFile.close();
-
-    return "Partición '" + name + "' eliminada exitosamente (modo: " + mode + ")";
-}
-
-std::string addSpaceToPartition(const std::string& path, const std::string& name, 
-                                int deltaSize, const std::string& unit) {
-    // Calcular delta en bytes
-    long long deltaBytes = calculateSizeInBytes(abs(deltaSize), unit);
-    if (deltaBytes < 0) return "Error: Unidad inválida en -add";
-    if (deltaSize < 0) deltaBytes = -deltaBytes;  // Mantener signo negativo
-
-    std::fstream diskFile(path, std::ios::binary | std::ios::in | std::ios::out);
-    if (!diskFile.is_open()) {
-        return "Error: No se pudo abrir el disco";
-    }
-
-    MBR mbr;
-    diskFile.seekg(0, std::ios::beg);
-    diskFile.read(reinterpret_cast<char*>(&mbr), sizeof(MBR));
-
-    // Buscar partición
-    int foundIndex = -1;
-    for (int i = 0; i < 4; i++) {
-        if (mbr.mbr_partitions[i].part_status == '1' && 
-            strcmp(mbr.mbr_partitions[i].part_name, name.c_str()) == 0) {
-            foundIndex = i;
-            break;
-        }
-    }
-
-    if (foundIndex == -1) {
+    // Si es extendida, advertir sobre lógicas
+    if (mbr.mbr_partitions[foundIndex].part_type == 'E') {
         diskFile.close();
-        return "Error: No existe una partición con ese nombre";
+        return "Error: No se puede eliminar partición extendida con lógicas dentro";
     }
 
-    Partition& target = mbr.mbr_partitions[foundIndex];
-    long long newEnd = target.part_start + target.part_size + deltaBytes;
-    long long newStart = target.part_start;
+    // Eliminar partición
+    mbr.mbr_partitions[foundIndex].part_status = '0';
+    memset(mbr.mbr_partitions[foundIndex].part_name, 0, 16);
 
-    // Validaciones para QUITAR espacio
-    if (deltaBytes < 0) {
-        if (target.part_size + deltaBytes <= 0) {
-            diskFile.close();
-            return "Error: No se puede reducir a tamaño cero o negativo";
-        }
-    }
-    // Validaciones para AGREGAR espacio
-    else {
-        // Verificar que haya espacio libre DESPUÉS de la partición
-        long long diskEnd = mbr.mbr_tamano;
-        
-        // Revisar si hay otra partición que empiece donde queremos expandir
-        for (int i = 0; i < 4; i++) {
-            if (i != foundIndex && mbr.mbr_partitions[i].part_status == '1') {
-                Partition& other = mbr.mbr_partitions[i];
-                // Si otra partición está después y se solapa con la expansión
-                if (other.part_start >= target.part_start && 
-                    other.part_start < newEnd) {
-                    diskFile.close();
-                    return "Error: No hay espacio libre después de la partición";
-                }
-            }
-        }
-        
-        if (newEnd > diskEnd) {
-            diskFile.close();
-            return "Error: La expansión excede el tamaño del disco";
-        }
-    }
-
-    // Actualizar tamaño de la partición
-    target.part_size = static_cast<int>(target.part_size + deltaBytes);
-
-    // Escribir MBR actualizado
     diskFile.seekp(0, std::ios::beg);
     diskFile.write(reinterpret_cast<char*>(&mbr), sizeof(MBR));
     diskFile.close();
 
-    std::string action = (deltaBytes > 0) ? "agregado" : "reducido";
-    return "Espacio " + action + " a partición '" + name + "'\n" +
-           "  Nuevo tamaño: " + std::to_string(target.part_size) + " bytes";
+    return "Partición '" + name + "' eliminada exitosamente";
 }
 
 inline std::string FDisk(const std::string& input) {
@@ -547,28 +424,14 @@ inline std::string FDisk(const std::string& input) {
         if (params.path.empty()) {
             return "Error: -path es obligatorio";
         }
-        std::string expandedPath = expandPath(params.path);
 
-        //Eliminacion de la particion
-        if (params.hasDelete){
-            if(params.deleteMode != "fast" && params.deleteMode != "full"){
-                return "Error el modo eliminacion solo lee fast o full";
-        }
-        if (params.name.empty()) {
-                return "Error: -name es obligatorio para eliminar";
+        if (!params.deleteName.empty()) {
+            // Operación de eliminación
+            std::string expandedPath = expandPath(params.path);
+            if (!std::filesystem::exists(expandedPath)) {
+                return "Error: El disco no existe";
             }
-        return deletePartition(expandedPath, params.name, params.deleteMode);
-        }
-
-        //La creacion del ADD
-        if (params.hasAdd){
-            if(params.name.empty()){
-                return "Error: -name es obligaorio para agregar el espacio";
-            }
-            if (params.addSize <= 0){
-                return "Error: -add dee tener un tamano mayor a 0";
-            }
-            return addSpaceToPartition(expandedPath, params.name, params.addSize, params.unit);
+            return deletePartition(expandedPath, params.deleteName);
         }
 
         // Operación de creación
@@ -583,6 +446,8 @@ inline std::string FDisk(const std::string& input) {
         if (params.name.length() > 16) {
             return "Error: El nombre no debe exceder 16 caracteres";
         }
+
+        std::string expandedPath = expandPath(params.path);
 
         // Verificar que el disco exista
         if (!std::filesystem::exists(expandedPath)) {
@@ -625,6 +490,7 @@ inline std::string FDisk(const std::string& input) {
         } else {
             return createPrimaryOrExtended(expandedPath, sizeInBytes, partType, partFit, params.name);
         }
+
     } catch (const std::exception& e) {
         return std::string("Error en fdisk: ") + e.what();
     }

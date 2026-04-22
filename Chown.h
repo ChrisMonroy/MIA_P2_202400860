@@ -12,6 +12,7 @@
 #include "SuperBloque.h"
 #include "Inodos.h"
 #include "BloqueCarpeta.h"
+#include "BloqueArchivos.h"
 #include "Journal.h"
 #include "utils.h"
 #include "globals.h"
@@ -50,17 +51,49 @@ ChownParams parseChownCommand(const std::string& input) {
     return params;
 }
 
-// Buscar UID por nombre en users.txt (simulado en memoria o leyendo bloque)
-// Para este ejemplo, asumimos que puedes leer el users.txt o tienes una función helper
 int obtenerUIDPorNombre(std::fstream& file, const SuperBloque& sb, const std::string& nombreUsuario) {
-    // Implementación simplificada: buscar en el archivo users.txt (inodo 1 normalmente)
-    // Debes leer el contenido del archivo users.txt y parsear "UID,U,grupo,user,pass"
-    // Retorna el UID si existe, -1 si no
-    // NOTA: Esto depende de cómo tengas implementada la lectura de users.txt
-    // Aquí pondré un placeholder lógico:
-    if (nombreUsuario == "root") return 1;
-    // ... lógica para leer users.txt ...
-    return -1; 
+    // Leer inodo de users.txt (inodo 1 según EXT2)
+    Inodos usersInode;
+    file.seekg(sb.s_inode_start + 1 * sb.s_inode_s, std::ios::beg);
+    file.read(reinterpret_cast<char*>(&usersInode), sb.s_inode_s);
+    
+    // Recorrer bloques del archivo users.txt
+    for (int b = 0; b < 12 && usersInode.i_block[b] != -1; b++) {
+        BloqueArchivos bloque;  // ✅ Ajusta a tu struct real
+        file.seekg(sb.s_block_start + usersInode.i_block[b] * sb.s_block_s, std::ios::beg);
+        file.read(reinterpret_cast<char*>(&bloque), sb.s_block_s);
+        
+        // Parsear contenido (texto plano con formato CSV)
+        std::string contenido(bloque.b_content);  // ✅ Ajusta según tu struct
+        std::stringstream ss(contenido);
+        std::string linea;
+        
+        while (std::getline(ss, linea)) {
+            // Trim de \r, \n, espacios
+            linea.erase(std::remove_if(linea.begin(), linea.end(), 
+                [](unsigned char c) { return std::isspace(c) || c == '\0'; }), 
+                linea.end());
+            if (linea.empty()) continue;
+            
+            // Split por comas: UID,Tipo,Nombre,Pass,GID
+            std::vector<std::string> campos;
+            std::stringstream ls(linea);
+            std::string campo;
+            while (std::getline(ls, campo, ',')) {
+                campos.push_back(campo);
+            }
+            
+            // Buscar usuario: campos[1]=="U" && campos[2]==nombreUsuario
+            if (campos.size() >= 3 && campos[1] == "U" && trim(campos[2]) == nombreUsuario) {
+                try {
+                    return std::stoi(campos[0]);  // ✅ Retornar UID
+                } catch (...) {
+                    continue;
+                }
+            }
+        }
+    }
+    return -1;  // No encontrado
 }
 
 void chownRecursivo(std::fstream& file, const SuperBloque& sb, int inodoActual, 
@@ -158,34 +191,38 @@ inline std::string Chown(const std::string& input) {
         file.seekg(particionStart, std::ios::beg);
         file.read(reinterpret_cast<char*>(&sb), sizeof(SuperBloque));
         
-        // Validar que el usuario exista (aquí debes implementar la búsqueda real en users.txt)
+        // ✅ Buscar UID usando la función implementada
         int nuevoUID = obtenerUIDPorNombre(file, sb, params.usuario); 
-        if (nuevoUID == -1) return "Error: El usuario '" + params.usuario + "' no existe";
+        if (nuevoUID == -1) {
+            file.close();
+            return "Error: El usuario '" + params.usuario + "' no existe";
+        }
         
-        // Navegar al inodo objetivo (implementar función buscarInodoPorRuta)
-        int inodoTarget = 0; // Placeholder: debes implementar navegación
+        // ✅ Navegar al inodo objetivo
+        int inodoTarget = buscarInodoPorRuta(file, sb, params.path, 0);
+        if (inodoTarget == -1) {
+            file.close();
+            return "Error: No existe la ruta: " + params.path;
+        }
         
         int cambios = 0;
         chownRecursivo(file, sb, inodoTarget, nuevoUID, usuarioActual, cambios);
         
         registrarJournalChown(file, sb, params.path.c_str(), params.usuario.c_str());
+        
+        file.flush();
         file.close();
 
-        // Después de cambiar el propietario:
         if (!partitionId.empty()) {
-        CommandJournaling::add(
-        partitionId,
-        "CHANGE_OWNER",
-        params.path,
-        "UID: " + std::to_string(usuarioActual.uid) + " -> " + std::to_string(nuevoUID)
-    );
-}
+            CommandJournaling::add(partitionId, "CHANGE_OWNER", params.path, 
+                                  "UID: " + std::to_string(usuarioActual.uid) + " -> " + std::to_string(nuevoUID));
+        }
         
         std::ostringstream result;
         result << "-----------CHOWN-----------\n"
                << "Propietario cambiado exitosamente\n"
                << "  Ruta: " << params.path << "\n"
-               << "  Nuevo propietario: " << params.usuario << "\n"
+               << "  Nuevo propietario: " + params.usuario << "\n"
                << "  Elementos afectados: " << cambios;
         return result.str();
         
@@ -193,5 +230,6 @@ inline std::string Chown(const std::string& input) {
         return std::string("Error en chown: ") + e.what();
     }
 }
+
 
 #endif

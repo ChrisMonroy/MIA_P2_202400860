@@ -16,7 +16,80 @@
 #include "BloqueCarpeta.h"
 #include "Inodos.h"
 #include "SuperBloque.h"
-#include "Journaling.h"
+
+// Función auxiliar: Buscar inodo por ruta
+int findInodeByPath2(std::fstream& file, const SuperBloque& sb, const std::string& path) {
+    std::string cleanPath = path;
+    
+    // Caso raíz
+    if (cleanPath.empty() || cleanPath == "/") {
+        return 0;
+    }
+    
+    // Eliminar slash inicial
+    if (cleanPath[0] == '/') {
+        cleanPath = cleanPath.substr(1);
+    }
+    
+    // Separar ruta en partes
+    std::vector<std::string> parts;
+    std::string part;
+    std::istringstream iss(cleanPath);
+    
+    while (std::getline(iss, part, '/')) {
+        if (!part.empty()) {
+            parts.push_back(part);
+        }
+    }
+    
+    if (parts.empty()) {
+        return 0;
+    }
+    
+    int currentInodeIndex = 0;
+    
+    // Recorrer cada parte de la ruta
+    for (size_t i = 0; i < parts.size(); i++) {
+        Inodos currentInode;
+        file.seekg(sb.s_inode_start + currentInodeIndex * sizeof(Inodos), std::ios::beg);
+        file.read(reinterpret_cast<char*>(&currentInode), sizeof(Inodos));
+        
+        // Verificar que sea directorio
+        if (currentInode.i_type != '1') {
+            return -1;
+        }
+        
+        bool found = false;
+        
+        // Buscar en todos los bloques del directorio
+        for (int b = 0; b < 12 && currentInode.i_block[b] != -1; b++) {
+            BloqueCarpeta dirBlock;
+            file.seekg(sb.s_block_start + currentInode.i_block[b] * sizeof(BloqueCarpeta), std::ios::beg);
+            file.read(reinterpret_cast<char*>(&dirBlock), sizeof(BloqueCarpeta));
+            
+            for (int j = 0; j < 4; j++) {
+                if (dirBlock.b_content[j].b_inodo == -1) continue;
+                
+                std::string name = dirBlock.b_content[j].b_name;
+                name.erase(std::remove(name.begin(), name.end(), '\0'), name.end());
+                
+                if (name == parts[i]) {
+                    currentInodeIndex = dirBlock.b_content[j].b_inodo;
+                    found = true;
+                    break;
+                }
+            }
+            
+            if (found) break;
+        }
+        
+        if (!found) {
+            return -1;
+        }
+    }
+    
+    return currentInodeIndex;
+}
 
 // Comando Mkfile
 std::string Mkfile(const std::string& input) {
@@ -100,22 +173,14 @@ std::string Mkfile(const std::string& input) {
         file.read(reinterpret_cast<char*>(&sb), sizeof(SuperBloque));
 
         // Encontrar directorio padre
-        std::string fileName = path;
-        std::string parentPath = "/";
-
+        std::string parentPath = "/", fileName = path;
         size_t lastSlash = path.find_last_of('/');
-        if (lastSlash != std::string::npos) {
-        fileName = path.substr(lastSlash + 1);
-    
-        // Determinar ruta padre
-        if (lastSlash == 0) {
-            parentPath = "/"; 
-        } else {
-        parentPath = path.substr(0, lastSlash); 
-    }
-}
+        if (lastSlash != std::string::npos && lastSlash > 0) {
+            parentPath = path.substr(0, lastSlash);
+            fileName = path.substr(lastSlash + 1);
+        }
         
-        int parentInodeIndex = findInodeByPath(file, sb, parentPath);
+        int parentInodeIndex = findInodeByPath2(file, sb, parentPath);
         
         if (parentInodeIndex == -1) {
             file.close();
@@ -190,7 +255,7 @@ std::string Mkfile(const std::string& input) {
         fileInode.i_atime = time(nullptr);
         fileInode.i_ctime = time(nullptr);
         fileInode.i_mtime = time(nullptr);
-        fileInode.i_type = '1'; // Tipo archivo
+        fileInode.i_type = '0'; // Tipo archivo
         strncpy(fileInode.i_perm, "664", sizeof(fileInode.i_perm) - 1);
         
         for (int i = 0; i < 15; i++) {
@@ -310,16 +375,6 @@ std::string Mkfile(const std::string& input) {
         file.write(reinterpret_cast<char*>(&sb), sizeof(SuperBloque));
         
         file.close();
-
-        std::string partitionId = getSessionPartitionId();
-        if (!partitionId.empty()) {
-            CommandJournaling::add(
-                partitionId,
-                "CREATE_FILE",
-                path,
-                "Size: " + std::to_string(size) + " bytes"
-            );
-        }
         
         // Mensaje de éxito
         std::ostringstream result;

@@ -43,19 +43,6 @@
 #include "Loss.h"
 #include "Unmount.h"
 
-extern bool is_logged;
-extern char current_user[16];
-extern std::vector<MountedPartition> mounted_list;
-extern int mounted_count;
-
-
-inline std::string trim(const std::string& str) {
-    size_t start = str.find_first_not_of(" \t");
-    if (start == std::string::npos) return "";
-    size_t end = str.find_last_not_of(" \t");
-    return str.substr(start, end - start + 1);
-}
-
 
 inline std::string ejecutarComando(const std::string& comando) {
     std::string cmd = trim(comando);

@@ -237,11 +237,11 @@ void actualizarBitmaps(std::fstream& file, const SuperBloque& sb,
     // Actualizar contadores en SuperBloque
     SuperBloque sbActualizado;
     file.seekg(0, std::ios::beg);
-    file.read(reinterpret_cast<char*>(&sbActualizado), sizeof(SuperBloque));
+    file.read(reinterpret_cast<char*>(&sbActualizado), sb.s_block_s);
     sbActualizado.s_free_inodes_count += inodosLiberados;
     sbActualizado.s_free_blocks_count += bloquesLiberados;
     file.seekp(0, std::ios::beg);
-    file.write(reinterpret_cast<char*>(&sbActualizado), sizeof(SuperBloque));
+    file.write(reinterpret_cast<char*>(&sbActualizado), sb.s_block_s);
 }
 
 void registrarEnJournal(std::fstream& file, const SuperBloque& sb,
@@ -317,7 +317,7 @@ inline std::string Remove(const std::string& input) {
         long particionStart = mbr.mbr_partitions[target->partition_index].part_start;
 
         file.seekg(particionStart, std::ios::beg);
-        file.read(reinterpret_cast<char*>(&sb), sizeof(SuperBloque));
+        file.read(reinterpret_cast<char*>(&sb), sb.s_block_s);
         
         // Buscar inodo del target
         int inodoTarget = buscarInodoPorRuta(file, sb, params.path);

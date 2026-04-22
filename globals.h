@@ -42,27 +42,4 @@ inline int getBlockSize(const SuperBloque& sb) {
     return sb.s_block_s;
 }
 
-inline bool hasActiveSession() {
-    return is_logged && std::string(current_user).length() > 0;
-}
-
-inline std::string getSessionPartitionId() {
-    if (!hasActiveSession()) return "";
-    return usuarioActual.particionId;
-}
-
-inline int getSessionUID() {
-    if (!hasActiveSession()) return -1;
-    return usuarioActual.uid;  
-}
-
-inline int getSessionGID() {
-    if (!hasActiveSession()) return -1;
-    return usuarioActual.gid;  
-}
-
-inline bool isRootUser() {
-    return hasActiveSession() && (usuarioActual.uid == 1 || std::string(current_user) == "root");
-}
-
 #endif

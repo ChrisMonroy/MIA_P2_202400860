@@ -18,7 +18,6 @@
 #include "Inodos.h"
 #include "Login.h"
 #include "globals.h"
-#include "Journaling.h"
 
 std::string Rmgrp(const std::string& input) {
     try {
@@ -202,17 +201,6 @@ std::string Rmgrp(const std::string& input) {
         file.write(reinterpret_cast<char*>(&sb), sizeof(SuperBloque));
         
         file.close();
-
-        // Después de eliminar el grupo:
-        std::string partitionId = getSessionPartitionId();
-        if (!partitionId.empty()) {
-        CommandJournaling::add(
-        partitionId,
-        "DELETE_GROUP",
-        "/users.txt",
-        "Grupo eliminado: " + name
-    );
-}
         
         std::ostringstream result;
         result << "----- RMGRP ------\n";

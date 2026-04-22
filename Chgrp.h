@@ -19,7 +19,6 @@
 #include "Login.h"
 #include "utils.h"
 #include "globals.h"
-#include "Journaling.h"
 
 std::string Chgrp(const std::string& input) {
     try {
@@ -227,17 +226,6 @@ std::string Chgrp(const std::string& input) {
         file.write(reinterpret_cast<char*>(&sb), sizeof(SuperBloque));
         
         file.close();
-
-        // Después de cambiar el grupo:
-        std::string partitionId = getSessionPartitionId();
-        if (!partitionId.empty()) {
-        CommandJournaling::add(
-        partitionId,
-        "CHANGE_GROUP",
-        "/users.txt",
-        "User: " + user+ " -> " + grp
-    );
-}
         
         std::ostringstream result;
         result << "----- CHGRP -----\n";

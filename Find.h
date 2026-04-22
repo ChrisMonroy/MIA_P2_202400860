@@ -22,7 +22,7 @@ std::string getInodeName(std::fstream& file, const SuperBloque& sb, int targetIn
     // Buscar en todos los directorios
     Inodos rootInode;
     file.seekg(sb.s_inode_start, std::ios::beg);
-    file.read(reinterpret_cast<char*>(&rootInode), sizeof(Inodos));
+    file.read(reinterpret_cast<char*>(&rootInode), sb.s_inode_s);
     
     // BFS para buscar el inodo
     std::vector<std::pair<int, std::string>> queue;
@@ -36,15 +36,15 @@ std::string getInodeName(std::fstream& file, const SuperBloque& sb, int targetIn
         queue.erase(queue.begin());
         
         Inodos currentInode;
-        file.seekg(sb.s_inode_start + currentInodeIndex * sizeof(Inodos), std::ios::beg);
-        file.read(reinterpret_cast<char*>(&currentInode), sizeof(Inodos));
+        file.seekg(sb.s_inode_start + currentInodeIndex * sb.s_inode_s, std::ios::beg);
+        file.read(reinterpret_cast<char*>(&currentInode), sb.s_inode_s);
         
         if (currentInode.i_type != '1') continue;
         
         for (int b = 0; b < 12 && currentInode.i_block[b] != -1; b++) {
             BloqueCarpeta dirBlock;
-            file.seekg(sb.s_block_start + currentInode.i_block[b] * sizeof(BloqueCarpeta), std::ios::beg);
-            file.read(reinterpret_cast<char*>(&dirBlock), sizeof(BloqueCarpeta));
+            file.seekg(sb.s_block_start + currentInode.i_block[b] * sb.s_block_s, std::ios::beg);
+            file.read(reinterpret_cast<char*>(&dirBlock), sb.s_block_s);
             
             for (int j = 0; j < 4; j++) {
                 if (dirBlock.b_content[j].b_inodo == -1) continue;
@@ -96,15 +96,15 @@ bool matchPattern(const std::string& str, const std::string& pattern){
 void searchDirectory(std::fstream& file, const SuperBloque& sb, int dirInodeIndex, const std::string& currentPath, const std::string& namePattern, char typeFilter, int sizeFilter, std::vector<std::string>& results) {
 
     Inodos dirInode;
-    file.seekg(sb.s_inode_start + dirInodeIndex * sizeof(Inodos), std::ios::beg);
-    file.read(reinterpret_cast<char*>(&dirInode), sizeof(Inodos));
+    file.seekg(sb.s_inode_start + dirInodeIndex * sb.s_inode_s, std::ios::beg);
+    file.read(reinterpret_cast<char*>(&dirInode), sb.s_inode_s);
     
     if (dirInode.i_type != '1') return;
     
     for (int b = 0; b < 12 && dirInode.i_block[b] != -1; b++) {
         BloqueCarpeta dirBlock;
-        file.seekg(sb.s_block_start + dirInode.i_block[b] * sizeof(BloqueCarpeta), std::ios::beg);
-        file.read(reinterpret_cast<char*>(&dirBlock), sizeof(BloqueCarpeta));
+        file.seekg(sb.s_block_start + dirInode.i_block[b] * sb.s_block_s, std::ios::beg);
+        file.read(reinterpret_cast<char*>(&dirBlock), sb.s_block_s);
         
         for (int j = 0; j < 4; j++) {
             if (dirBlock.b_content[j].b_inodo == -1) continue;
@@ -119,8 +119,8 @@ void searchDirectory(std::fstream& file, const SuperBloque& sb, int dirInodeInde
             
             // Leer inodo hijo
             Inodos childInode;
-            file.seekg(sb.s_inode_start + childInodeIndex * sizeof(Inodos), std::ios::beg);
-            file.read(reinterpret_cast<char*>(&childInode), sizeof(Inodos));
+            file.seekg(sb.s_inode_start + childInodeIndex * sb.s_inode_s, std::ios::beg);
+            file.read(reinterpret_cast<char*>(&childInode), sb.s_inode_s);
             
             // Aplicar filtros
             bool nameMatch = namePattern.empty() || matchPattern(name, namePattern);
@@ -226,8 +226,8 @@ std::string Find(const std::string& input){
         
         // Verificar que sea directorio
         Inodos startInode;
-        file.seekg(sb.s_inode_start + startInodeIndex * sizeof(Inodos), std::ios::beg);
-        file.read(reinterpret_cast<char*>(&startInode), sizeof(Inodos));
+        file.seekg(sb.s_inode_start + startInodeIndex * sb.s_inode_s, std::ios::beg);
+        file.read(reinterpret_cast<char*>(&startInode), sb.s_inode_s);
         
         if (startInode.i_type != '1') {
             file.close();

@@ -15,9 +15,6 @@
 #include "globals.h"
 #include "utils.h"
 
-// Forward declaration or implementation of expandPath
-std::string expandPath(const std::string& path);
-
 extern std::vector<MountedPartition> mounted_list;
 extern int mounted_count;
 extern char current_user[16];
