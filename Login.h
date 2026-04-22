@@ -38,13 +38,9 @@ std::string readUsersTxt(std::fstream& file, const SuperBloque& sb) {
     file.seekg(sb.s_inode_start + 1 * sizeof(Inodos), std::ios::beg);
     file.read(reinterpret_cast<char*>(&usersInode), sizeof(Inodos));
     
-    // Debug temporal - descomenta para ver qué se lee
-    // std::cerr << "DEBUG: i_type = '" << usersInode.i_type << "'" << std::endl;
-    // std::cerr << "DEBUG: i_block[0] = " << usersInode.i_block[0] << std::endl;
-    
-    if (usersInode.i_type != '0') {  // Debe ser archivo
+    if (usersInode.i_type != '1') {
         return "";
-    }
+}
     
     // Leer bloques del archivo
     for (int i = 0; i < 12 && usersInode.i_block[i] != -1; i++) {
@@ -106,9 +102,14 @@ bool findUserInContent(const std::string& content, const std::string& username,
             // Debug temporal
             std::cerr << "DEBUG: storedPass=[" << storedPass << "] password=[" << password << "]" << std::endl;
             
+            if (type == "U" && fields.size() >= 5 && name == username) {
+            uid = id;
+            std::string storedPass = fields[3];
+    
             if (storedPass == password) {
                 return true;
             }
+        }
             return false;
         }
     }

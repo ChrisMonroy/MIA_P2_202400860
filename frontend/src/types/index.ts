@@ -25,28 +25,25 @@ export interface PartitionInfo {
   filesystem?: 'EXT2' | 'EXT3';
 }
 
+// src/types.ts
 export interface FileSystemItem {
-  name: string;
-  type: 'file' | 'folder';
-  permissions: string;
-  owner: string;
-  group: string;
-  size?: number;
-  modified?: string;
-  created?: string;
+  name: string;        // ← antes: nombre
+  type: 'folder' | 'file';
+  permissions: string; // ← antes: permisos
+  owner: string;       // ← antes: propietario
+  group: string;       // ← antes: grupo
+  size?: number;       // ← antes: tamano
 }
 
 export interface FileSystemResponse {
-  path: string;
-  type: 'file' | 'folder';
-  permissions: string;
-  owner: string;
-  group: string;
-  size?: number;
-  content?: FileSystemItem[];
-  fileContent?: string;
+  ruta: string;
+  tipo: 'folder' | 'file';
+  contenido: any[];    // ← Backend usa 'contenido'
+  permisos?: string;
+  propietario?: string;
+  grupo?: string;
+  tamano?: number;
 }
-
 export interface JournalEntry {
   operacion: string;
   ruta: string;

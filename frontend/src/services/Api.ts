@@ -62,89 +62,91 @@ getParticiones: async (diskPath: string): Promise<PartitionInfo[]> => {
   }
 },
   // Navegar sistema de archivos
-  navegar: async (idParticion: string, path: string): Promise<FileSystemResponse> => {
-    // Mock para desarrollo - REMOVER cuando backend esté listo
-    if (import.meta.env.DEV) {
-      return new Promise((resolve) => {
-        setTimeout(() => {
-          if (path === '/' || path === '') {
-            resolve({
-              path: '/',
-              type: 'folder',
-              permissions: '755',
-              owner: 'root',
-              group: 'root',
-              content: [
-                { name: 'home', type: 'folder', permissions: '755', owner: 'root', group: 'root' },
-                { name: 'users.txt', type: 'file', permissions: '664', owner: 'root', group: 'root', size: 45 }
-              ]
-            });
-          } else if (path === '/home') {
-            resolve({
-              path: '/home',
-              type: 'folder',
-              permissions: '755',
-              owner: 'root',
-              group: 'root',
-              content: [
-                { name: 'user', type: 'folder', permissions: '755', owner: 'user1', group: 'users' }
-              ]
-            });
-          }
-          resolve({
-            path,
-            type: 'folder',
-            permissions: '755',
-            owner: 'root',
-            group: 'root',
-            content: []
-          });
-        }, 300);
-      });
-    }
-
+navegar: async (idParticion: string, path: string): Promise<FileSystemResponse> => {
+  try {
     const encodedPath = path === '/' || path === '' ? '' : encodeURIComponent(path.startsWith('/') ? path.slice(1) : path);
-    const url = `${API_BASE}/api/fs/${idParticion}/${encodedPath}`;
-    const res = await fetch(url);
-    if (!res.ok) throw new Error('Error al navegar');
-    return res.json();
-  },
+    const url = encodedPath 
+      ? `${API_BASE}/api/fs/${idParticion}/${encodedPath}`
+      : `${API_BASE}/api/fs/${idParticion}`;
+    
+    console.log('[DEBUG] Fetch URL:', url);
+    
+    const res = await fetch(url, {
+      method: 'GET',
+      headers: { 'Content-Type': 'application/json' }
+    });
+    
+    const responseText = await res.text();
+    console.log('[DEBUG] Response status:', res.status, 'body:', responseText);
+    
+    if (!res.ok) {
+      throw new Error(`Error ${res.status}: ${responseText}`);
+    }
+    
+    const data = JSON.parse(responseText);
+    console.log('=== [FS DEBUG] Respuesta completa ===');
+  console.log('data:', data);
+  console.log('data.contenido:', data.contenido);
+  console.log('Es array?', Array.isArray(data.contenido));
+  console.log('Longitud:', data.contenido?.length);
+  
+  if (data.contenido && Array.isArray(data.contenido)) {
+    console.log('Elementos:', data.contenido.map((item: any) => ({
+      nombre: item.nombre,
+      tipo: item.tipo
+    })));
+  }
+    
+    
+    return data;
+  } catch (err: any) {
+    console.error('Error navigating:', err);
+    throw err;
+  }
+},
 
   // Leer contenido de archivo
-  leerArchivo: async (idParticion: string, path: string): Promise<string> => {
-    if (import.meta.env.DEV) {
-      return new Promise((resolve) => {
-        setTimeout(() => {
-          resolve('1,G,root\n1,U,root,root,123\n');
-        }, 200);
-      });
-    }
-    
+leerArchivo: async (idParticion: string, path: string): Promise<string> => {
+  try {
     const encodedPath = encodeURIComponent(path);
-    const res = await fetch(`${API_BASE}/api/file/${idParticion}?path=${encodedPath}`);
-    if (!res.ok) throw new Error('Error al leer archivo');
-    const data = await res.json();
-    return data.contenido;
-  },
-
-  // Obtener journaling de partición EXT3
-  getJournaling: async (idParticion: string): Promise<JournalEntry[]> => {
-    if (import.meta.env.DEV) {
-      return new Promise((resolve) => {
-        setTimeout(() => {
-          resolve([
-            { operacion: 'MKFS', ruta: '/', contenido: 'Sistema EXT3 inicializado', fecha: '2026-04-13 10:30:00' },
-            { operacion: 'MKDIR', ruta: '/home', contenido: 'Carpeta creada', fecha: '2026-04-13 10:31:15' },
-            { operacion: 'MKFILE', ruta: '/home/users.txt', contenido: 'Archivo creado', fecha: '2026-04-13 10:32:00' }
-          ]);
-        }, 300);
-      });
+    const res = await fetch(`${API_BASE}/api/file/${idParticion}?path=${encodedPath}`, {
+      method: 'GET',
+      headers: { 'Content-Type': 'application/json' }
+    });
+    
+    if (!res.ok) {
+      const errorText = await res.text();
+      throw new Error(`Error ${res.status}: ${errorText}`);
     }
     
-    const res = await fetch(`${API_BASE}/api/journaling/${idParticion}`);
-    if (!res.ok) throw new Error('Error al obtener journaling');
-    return res.json();
-  },
+    const data = await res.json();
+    return data.contenido || '';
+  } catch (err: any) {
+    console.error('Error reading file:', err);
+    throw err;
+  }
+},
+
+// Obtener journaling - VERSIÓN REAL
+getJournaling: async (idParticion: string): Promise<JournalEntry[]> => {
+  try {
+    const res = await fetch(`${API_BASE}/api/journaling/${idParticion}`, {
+      method: 'GET',
+      headers: { 'Content-Type': 'application/json' }
+    });
+    
+    if (!res.ok) {
+      const errorText = await res.text();
+      throw new Error(`Error ${res.status}: ${errorText}`);
+    }
+    
+    const data = await res.json();
+    return data.entradas || [];
+  } catch (err: any) {
+    console.error('Error getting journaling:', err);
+    throw err;
+  }
+},
 
   // Login gráfico
   login: async (user: string, pass: string, id: string): Promise<CommandResult> => {

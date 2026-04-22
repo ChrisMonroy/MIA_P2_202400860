@@ -148,7 +148,7 @@ std::string Mkfs(const std::string& input) {
         long blockTableStart = inodeTableStart + (n * inodeSize);
         
         SuperBloque sb;
-        memset(&sb, 0, sizeof(SuperBloque));
+        memset(&sb, 0, sb.s_block_s);
 
         sb.s_filesystem_type = fsType;             
         sb.s_inodes_count = static_cast<int>(n);
@@ -175,7 +175,7 @@ std::string Mkfs(const std::string& input) {
         }
         
         file.seekp(partStart, std::ios::beg);
-        file.write(reinterpret_cast<char*>(&sb), sizeof(SuperBloque));
+        file.write(reinterpret_cast<char*>(&sb), sb.s_block_s);
 
         if (fsType == 3) {
             for (int i = 0; i < n; i++) {
@@ -217,7 +217,7 @@ std::string Mkfs(const std::string& input) {
         }
         
         Inodos rootInode;
-        memset(&rootInode, 0, sizeof(Inodos));
+        memset(&rootInode, 0, sb.s_inode_s);
         
         rootInode.i_uid = 1;
         rootInode.i_gid = 1;
@@ -235,11 +235,11 @@ std::string Mkfs(const std::string& input) {
         rootInode.i_block[0] = 0; 
         
         file.seekp(inodeTableStart, std::ios::beg);
-        file.write(reinterpret_cast<char*>(&rootInode), sizeof(Inodos));
+        file.write(reinterpret_cast<char*>(&rootInode), sb.s_inode_s);
         
 
         BloqueCarpeta rootBlock;
-        memset(&rootBlock, 0, sizeof(BloqueCarpeta));
+        memset(&rootBlock, 0, sb.s_block_s);
         
         // Entrada (directorio actual)
         strncpy(rootBlock.b_content[0].b_name, ".", 12);
@@ -256,10 +256,10 @@ std::string Mkfs(const std::string& input) {
         rootBlock.b_content[3].b_inodo = -1;
         
         file.seekp(blockTableStart, std::ios::beg);
-        file.write(reinterpret_cast<char*>(&rootBlock), sizeof(BloqueCarpeta));
+        file.write(reinterpret_cast<char*>(&rootBlock), sb.s_block_s);
         
         Inodos usersInode;
-        memset(&usersInode, 0, sizeof(Inodos));
+        memset(&usersInode, 0, sb.s_inode_s);
         
         const char* usersContent = "1,G,root\n1,U,root,123,root\n";
         int contentLen = strlen(usersContent);
@@ -278,16 +278,16 @@ std::string Mkfs(const std::string& input) {
         }
         usersInode.i_block[0] = 1;  // Apunta al bloque 1 
         
-        file.seekp(inodeTableStart + sizeof(Inodos), std::ios::beg);
-        file.write(reinterpret_cast<char*>(&usersInode), sizeof(Inodos));
+        file.seekp(inodeTableStart + sb.s_inode_s, std::ios::beg);
+        file.write(reinterpret_cast<char*>(&usersInode), sb.s_inode_s);
         
 
         BloqueArchivos block;
-        memset(&block, 0, sizeof(BloqueArchivos));
+        memset(&block, 0, sb.s_block_s);
         strncpy(block.b_content, usersContent, contentLen);
         
-        file.seekp(blockTableStart + sizeof(BloqueCarpeta), std::ios::beg);
-        file.write(reinterpret_cast<char*>(&block), sizeof(BloqueArchivos));
+        file.seekp(blockTableStart + sb.s_block_s, std::ios::beg);
+        file.write(reinterpret_cast<char*>(&block), sb.s_block_s);
         
         // Bitmap: 0 = libre, 1 = ocupado
         char bitmapByte = 0;

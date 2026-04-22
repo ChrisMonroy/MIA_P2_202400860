@@ -23,20 +23,32 @@ export default function FileSystemExplorer({ onLogout }: ExplorerProps) {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
 
-  const loadFolder = async (path: string) => {
-    if (!selectedPartition) return;
-    setLoading(true);
-    setError('');
-    try {
-      const data = await api.navegar(selectedPartition.id, path);
-      setFolderContent(data.content || []);
-    } catch (err: any) {
-      setError(err.message || 'Error al cargar la carpeta');
-      setFolderContent([]);
-    } finally {
-      setLoading(false);
-    }
-  };
+const loadFolder = async (path: string) => {
+  if (!selectedPartition) return;
+  setLoading(true);
+  setError('');
+  try {
+    const data = await api.navegar(selectedPartition.id, path);
+    
+    const mappedContent = (data.contenido || []).map((item: any) => ({
+      name: item.nombre,           
+      type: item.tipo,             
+      permissions: item.permisos, 
+      owner: item.propietario,     
+      group: item.grupo,          
+      size: item.tamano           
+    }));
+    
+    setFolderContent(mappedContent);
+    
+    console.log('Contenido mapeado:', mappedContent);
+  } catch (err: any) {
+    setError(err.message || 'Error al cargar la carpeta');
+    setFolderContent([]);
+  } finally {
+    setLoading(false);
+  }
+};
 
   useEffect(() => {
     if (step === 'browse' && selectedPartition && !viewingFile) {
@@ -44,9 +56,6 @@ export default function FileSystemExplorer({ onLogout }: ExplorerProps) {
     }
   }, [step, selectedPartition, currentPath, viewingFile]);
 
-  // =====================
-  // HANDLERS
-  // =====================
   const handleDiskSelect = (disk: DiskInfo) => {
     setSelectedDisk(disk);
     setStep('partition');
@@ -90,13 +99,10 @@ export default function FileSystemExplorer({ onLogout }: ExplorerProps) {
     setStep(step === 'journal' ? 'browse' : 'journal');
   };
 
-  // =====================
-  // RENDER
-  // =====================
   return (
     <div className="explorer-container">
       <header className="explorer-header">
-        <h2>📁 Explorador del Sistema de Archivos</h2>
+        <h2> Explorador del Sistema de Archivos</h2>
 
         <div className="header-controls">
           {step !== 'disk' && (
@@ -105,11 +111,11 @@ export default function FileSystemExplorer({ onLogout }: ExplorerProps) {
 
           {selectedPartition && (
             <button onClick={handleToggleJournal}>
-              {step === 'journal' ? '📁 Explorador' : '📜 Journaling'}
+              {step === 'journal' ? ' Explorador' : ' Journaling'}
             </button>
           )}
 
-          <button onClick={onLogout}>🔒 Salir</button>
+          <button onClick={onLogout}> Salir</button>
         </div>
       </header>
 
@@ -154,7 +160,7 @@ export default function FileSystemExplorer({ onLogout }: ExplorerProps) {
           <JournalViewer partitionId={selectedPartition.id} />
         )}
 
-        {loading && <div className="overlay-loading">⏳ Cargando...</div>}
+        {loading && <div className="overlay-loading"> Cargando...</div>}
         {error && <div className="overlay-error">{error}</div>}
       </main>
     </div>

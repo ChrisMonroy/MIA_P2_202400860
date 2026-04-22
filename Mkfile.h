@@ -190,7 +190,7 @@ std::string Mkfile(const std::string& input) {
         fileInode.i_atime = time(nullptr);
         fileInode.i_ctime = time(nullptr);
         fileInode.i_mtime = time(nullptr);
-        fileInode.i_type = '0'; // Tipo archivo
+        fileInode.i_type = '1'; // Tipo archivo
         strncpy(fileInode.i_perm, "664", sizeof(fileInode.i_perm) - 1);
         
         for (int i = 0; i < 15; i++) {

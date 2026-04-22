@@ -41,6 +41,7 @@
 #include "Remove.h"
 #include "Journaling.h"
 #include "Loss.h"
+#include "Unmount.h"
 
 extern bool is_logged;
 extern char current_user[16];
@@ -105,23 +106,25 @@ inline std::string ejecutarComando(const std::string& comando) {
         return Rep(cmd);
     } else if (nombreComando == "copy") {
     return Copy(cmd);
-} else if (nombreComando == "move") {
-    return Move(cmd);
-} else if (nombreComando == "find") {
-    return Find(cmd);
-} else if (nombreComando == "chown") {
-    return Chown(cmd);
-} else if (nombreComando == "chmod") {
-    return Chmod(cmd);
-} else if (nombreComando == "rename") {
-    return Rename(cmd);
-} else if (nombreComando == "remove") {
-    return Remove(cmd);
-}  else if (nombreComando == "journaling") {
-    return CommandJournaling::execute(cmd);
-}else if (nombreComando == "loss") {
-    return ejecutarLoss(cmd);
-} else if (nombreComando == "exit" || nombreComando == "quit") {
+    } else if (nombreComando == "move") {
+        return Move(cmd);
+    } else if (nombreComando == "find") {
+        return Find(cmd);
+    } else if (nombreComando == "chown") {
+        return Chown(cmd);
+    } else if (nombreComando == "chmod") {
+        return Chmod(cmd);
+    } else if (nombreComando == "rename") {
+        return Rename(cmd);
+    } else if (nombreComando == "remove") {
+        return Remove(cmd);
+    }  else if (nombreComando == "journaling") {
+        return CommandJournaling::execute(cmd);
+    }else if (nombreComando == "loss") {
+        return ejecutarLoss(cmd);
+    } else if(nombreComando == "unmount") {
+        return Unmount(cmd);
+    }else if (nombreComando == "exit" || nombreComando == "quit") {
         return "EXIT";
     } else {
         return "Error: Comando no reconocido '" + nombreComando + "'";
