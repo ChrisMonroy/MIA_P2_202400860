@@ -14,7 +14,7 @@
 inline std::string ejecutarLoss(const std::string& input) {
     std::ostringstream salida;
 
-    // 1. Parsear -id
+    //Parsear -id
     std::string id;
     size_t pos = input.find("-id=");
     if (pos == std::string::npos) {
@@ -29,7 +29,7 @@ inline std::string ejecutarLoss(const std::string& input) {
         return "Error: ID no puede estar vacío";
     }
 
-    // 2. Buscar partición montada
+    //Buscar partición montada
     MountedPartition* target = nullptr;
     for (auto& mp : mounted_list) {
         if (mp.id == id) {
@@ -41,13 +41,13 @@ inline std::string ejecutarLoss(const std::string& input) {
         return "Error: Partición con ID '" + id + "' no está montada";
     }
 
-    // 3. Abrir disco
+    //Abrir disco
     std::fstream file(target->path, std::ios::binary | std::ios::in | std::ios::out);
     if (!file.is_open()) {
         return "Error: No se pudo abrir el disco";
     }
 
-    // 4. Leer MBR y SuperBloque
+    //Leer MBR y SuperBloque
     MBR mbr;
     file.seekg(0);
     file.read(reinterpret_cast<char*>(&mbr), sizeof(MBR));
@@ -64,7 +64,7 @@ inline std::string ejecutarLoss(const std::string& input) {
         return "Error: LOSS solo aplica a EXT3";
     }
 
-    // 6. Cálculos
+    //Cálculos
     int sizeBmInodos = (sb.s_inodes_count + 7) / 8;
     int sizeBmBloques = (sb.s_blocks_count + 7) / 8;
     int sizeAreaInodos = sb.s_inodes_count * sb.s_inode_s;
@@ -82,7 +82,7 @@ inline std::string ejecutarLoss(const std::string& input) {
         }
     };
 
-    // 7. Limpiar
+    //Limpiar
     limpiarRango(sb.s_bm_inode_start, sizeBmInodos);
     limpiarRango(sb.s_bm_block_start, sizeBmBloques);
     limpiarRango(sb.s_inode_start, sizeAreaInodos);
@@ -91,10 +91,10 @@ inline std::string ejecutarLoss(const std::string& input) {
     file.flush();
     file.close();
 
-    // 8. Journal
+    //Journal
     CommandJournaling::add(id, "LOSS", id, "Sistema EXT3 limpiado");
 
-    // 9. Salida
+    // Salida
     salida << "===== LOSS =====\n";
     salida << "Pérdida simulada en " << id << "\n";
     salida << "Inodos: " << sizeAreaInodos << " bytes\n";

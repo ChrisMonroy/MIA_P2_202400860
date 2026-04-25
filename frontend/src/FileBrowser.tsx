@@ -30,17 +30,17 @@ export default function FileBrowser({ items, currentPath, onNavigate, onViewFile
   };
 
   if (items.length === 0) {
-    return <div className="empty-folder">📭 Carpeta vacía</div>;
+    return <div className="empty-folder">Carpeta vacía</div>;
   }
 
   return (
     <div className="file-browser">
       <div className="breadcrumb">
-        <button onClick={() => onNavigate('/')} className="breadcrumb-home">🏠</button>
+        <button onClick={() => onNavigate('/')} className="breadcrumb-home">home</button>
         {currentPath !== '/' && (
           <>
             <span>/</span>
-            <button onClick={handleParent}>⬅️</button>
+            <button onClick={handleParent}>⬅regresar</button>
             <span>{currentPath}</span>
           </>
         )}
@@ -65,7 +65,7 @@ export default function FileBrowser({ items, currentPath, onNavigate, onViewFile
               className={`file-row ${item.type} clickable`}
             >
               <td>
-                {item.type === 'folder' ? '📁' : '📄'} {item.name}
+                {item.type === 'folder' ? 'carpeta' : 'archivo'} {item.name}
               </td>
               <td>{item.type === 'folder' ? 'Carpeta' : 'Archivo'}</td>
               <td><code className="perm-badge">{item.permissions}</code></td>

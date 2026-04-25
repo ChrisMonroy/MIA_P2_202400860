@@ -288,7 +288,6 @@ inline void iniciarServidor(int puerto = 3001) {
         }
     });
 
-    // ✅ FIX JOURNALING: Asegurar que retorna entradas
     CROW_ROUTE(app, "/api/journaling/<string>")([](const std::string& idParticion) {
         try {
             std::string target = CommandJournaling::toLower(idParticion);
@@ -309,7 +308,6 @@ inline void iniciarServidor(int puerto = 3001) {
         }
     });
 
-    // ✅ FIX PRINCIPAL: Validación de tipo de archivo ('0' = archivo, '1' = carpeta)
     CROW_ROUTE(app, "/api/file/<string>")([](const crow::request& req, const std::string& idParticion) {
         try {
             std::string rutaCodificada = "";
@@ -337,7 +335,6 @@ inline void iniciarServidor(int puerto = 3001) {
             Inodos inode; file.seekg(sb.s_inode_start + inodoArchivo * sb.s_inode_s);
             file.read(reinterpret_cast<char*>(&inode), sb.s_inode_s);
             
-            // ✅ CORRECCIÓN: '0' = archivo, '1' = carpeta
             if (inode.i_type != '0') { 
                 file.close(); 
                 return crow::response(400, R"({"error":"No es un archivo"})"); 

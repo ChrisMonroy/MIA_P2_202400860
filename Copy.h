@@ -90,7 +90,7 @@ bool tienePermisoCopy(const Inodos& inodo, int permisoRequerido, int sessionUid,
     return (permOtros & permisoRequerido) == permisoRequerido;
 }
 
-// 📦 Leer contenido de un archivo (solo bloques directos por simplicidad)
+//Leer contenido de un archivo (solo bloques directos por simplicidad)
 std::string leerContenidoArchivo(std::fstream& file, const SuperBloque& sb, const Inodos& fileInode) {
     std::string content = "";
     for (int i = 0; i < 12 && fileInode.i_block[i] != -1; i++) {
@@ -102,7 +102,7 @@ std::string leerContenidoArchivo(std::fstream& file, const SuperBloque& sb, cons
     return content;
 }
 
-// 🆔 Obtener un inodo libre del bitmap
+// Obtener un inodo libre del bitmap
 int obtenerInodoLibreCopy(std::fstream& file, SuperBloque& sb, long particionStart) {
     if (sb.s_free_inodes_count <= 0) return -1;
     
@@ -129,7 +129,7 @@ int obtenerInodoLibreCopy(std::fstream& file, SuperBloque& sb, long particionSta
     return -1;
 }
 
-// 🧱 Obtener un bloque libre del bitmap
+//Obtener un bloque libre del bitmap
 int obtenerBloqueLibreCopy(std::fstream& file, SuperBloque& sb, long particionStart) {
     if (sb.s_free_blocks_count <= 0) return -1;
     
@@ -163,7 +163,6 @@ bool agregarEntradaCarpetaCopy(std::fstream& file, SuperBloque& sb, int inodoPad
     file.seekg(sb.s_inode_start + (inodoPadreId * sb.s_inode_s), std::ios::beg);
     file.read(reinterpret_cast<char*>(&inodoPadre), sb.s_inode_s);
 
-    // 🔍 FASE 1: Buscar espacio en bloques YA asignados
     for (int i = 0; i < 12 && inodoPadre.i_block[i] != -1; i++) {
         BloqueCarpeta fb;
         file.seekg(sb.s_block_start + (inodoPadre.i_block[i] * sb.s_block_s), std::ios::beg);
@@ -171,7 +170,6 @@ bool agregarEntradaCarpetaCopy(std::fstream& file, SuperBloque& sb, int inodoPad
         
         for (int j = 0; j < 4; j++) {
             if (fb.b_content[j].b_inodo == -1) {
-                // ✅ ESPACIO ENCONTRADO - ESCRIBIR
                 escribirNombreEnBloque(fb.b_content[j].b_name, nombre);
                 fb.b_content[j].b_inodo = nuevoInodoId;
                 
@@ -187,8 +185,6 @@ bool agregarEntradaCarpetaCopy(std::fstream& file, SuperBloque& sb, int inodoPad
         }
     }
 
-    // 🔍 FASE 2: No hubo espacio → crear NUEVO BLOQUE
-    // Primero, encontrar un slot -1 en i_block para asignar el nuevo bloque
     int slotLibre = -1;
     for (int i = 0; i < 12; i++) {
         if (inodoPadre.i_block[i] == -1) {
@@ -198,7 +194,6 @@ bool agregarEntradaCarpetaCopy(std::fstream& file, SuperBloque& sb, int inodoPad
     }
     
     if (slotLibre == -1) {
-        // ❌ Directorio lleno: 12 bloques asignados y todos llenos
         return false;
     }
     
@@ -327,7 +322,7 @@ int crearArchivoCopia(std::fstream& file, SuperBloque& sb, int inodoPadreId,
 
 bool copiarRecursivo(std::fstream& file, SuperBloque& sb, int inodoOrigenId, int inodoDestinoId, 
                      const std::string& nombre, long particionStart, int sessionUid, int sessionGid,
-                     int& inodoCreado) { // ✅ Parámetro de salida para el inodo creado
+                     int& inodoCreado) {
     Inodos inodoOrigen;
     file.seekg(sb.s_inode_start + (inodoOrigenId * sb.s_inode_s), std::ios::beg);
     file.read(reinterpret_cast<char*>(&inodoOrigen), sb.s_inode_s);
@@ -346,7 +341,7 @@ bool copiarRecursivo(std::fstream& file, SuperBloque& sb, int inodoOrigenId, int
                                                   particionStart, sessionUid, sessionGid);
         if (nuevoInodoCarpeta == -1) return false;
         
-        inodoCreado = nuevoInodoCarpeta; // ✅ Para directorios, retornamos el inodo de la carpeta
+        inodoCreado = nuevoInodoCarpeta; 
 
         for (int i = 0; i < 12; i++) {
             if (inodoOrigen.i_block[i] != -1) {
@@ -500,7 +495,6 @@ inline std::string Copy(const std::string& input) {
             return "Error: no hay bloques disponibles para la copia";
         }
         
-        // ✅ Ejecutar copia y capturar el inodo creado
         int inodoCreado = -1;
         if (!copiarRecursivo(file, sb, inodoOrigenId, inodoPadreDestinoId, nombreNuevo, 
                             particionStart, sessionUid, sessionGid, inodoCreado)) {
@@ -513,8 +507,6 @@ int verificacion = buscarEnCarpetaCopy(file, sb, inodoPadreDestinoId, nombreNuev
 std::cerr << "[DEBUG COPY] Buscar resultado: inodo=" << verificacion << "\n";
 
 if (verificacion == -1) {
-    std::cerr << "[DEBUG COPY] ❌ ERROR: La entrada NO se encontró en el directorio\n";
-    // Listar entradas del directorio para debug
     Inodos dirDebug;
     file.seekg(sb.s_inode_start + inodoPadreDestinoId * sb.s_inode_s, std::ios::beg);
     file.read(reinterpret_cast<char*>(&dirDebug), sb.s_inode_s);

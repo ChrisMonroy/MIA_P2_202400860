@@ -244,7 +244,6 @@ bool moverMismaParticion(std::fstream& file, SuperBloque& sb,
     file.seekp(sb.s_inode_start + inodoPadreOrigen * sb.s_inode_s, std::ios::beg);
     file.write(reinterpret_cast<char*>(&inodePadreOrigen), sb.s_inode_s);
 
-    // 2️⃣ Agregar en destino
     if (!agregarEntradaCarpetaMove(file, sb, inodoPadreDestino, nombreNuevo, inodoOrigen, particionStart)) {
         return false;
     }
@@ -267,7 +266,7 @@ bool moverMismaParticion(std::fstream& file, SuperBloque& sb,
     return true;
 }
 
-// 📰 Journal
+// Journal
 void registrarJournalMove(std::fstream& file, const SuperBloque& sb,
                          const char* origen, const char* destino) {
     if (sb.s_filesystem_type != 3) return;

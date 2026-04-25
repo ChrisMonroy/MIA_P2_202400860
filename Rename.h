@@ -90,7 +90,6 @@ int buscarInodoPorRuta2(std::fstream& file, const SuperBloque& sb,
         file.seekg(sb.s_inode_start + inodoPadre * sb.s_inode_s, std::ios::beg);
         file.read(reinterpret_cast<char*>(&inodePadre), sb.s_inode_s);
         
-        // ✅ Directorio = '1'
         if (inodePadre.i_type != '1') return -1;
         
         bool encontrado = false;
@@ -103,11 +102,10 @@ int buscarInodoPorRuta2(std::fstream& file, const SuperBloque& sb,
             for (int j = 0; j < 4; j++) {
                 if (bloque.b_content[j].b_inodo == -1) continue;
                 
-                // ✅ Comparación segura con std::string
                 std::string nombreEnBloque(bloque.b_content[j].b_name);
                 nombreEnBloque = nombreEnBloque.substr(0, nombreEnBloque.find('\0'));
                 
-                if (nombreEnBloque == nombre) {  // ✅ COMPARACIÓN REAL
+                if (nombreEnBloque == nombre) { 
                     inodoPadre = bloque.b_content[j].b_inodo;
                     encontrado = true;
                     break;
@@ -195,7 +193,6 @@ inline std::string Rename(const std::string& input) {
         file.seekg(particionStart, std::ios::beg);
         file.read(reinterpret_cast<char*>(&sb), sizeof(SuperBloque));
         
-        // ✅ Usar la función corregida de utils.h
         int inodoTarget = buscarInodoPorRuta(file, sb, params.path, 0);
         if (inodoTarget == -1) {
             file.close();
@@ -221,7 +218,6 @@ inline std::string Rename(const std::string& input) {
         file.seekg(sb.s_block_start + info.idxBloquePadre * sb.s_block_s, std::ios::beg);
         file.read(reinterpret_cast<char*>(&bloquePadre), sb.s_block_s);
         
-        // ✅ Actualizar nombre con null-termination segura
         memset(bloquePadre.b_content[info.idxEntrada].b_name, 0, 12);
         strncpy(bloquePadre.b_content[info.idxEntrada].b_name, params.name.c_str(), 11);
         bloquePadre.b_content[info.idxEntrada].b_name[11] = '\0';
@@ -233,7 +229,7 @@ inline std::string Rename(const std::string& input) {
         file.seekp(sb.s_inode_start + inodoTarget * sb.s_inode_s, std::ios::beg);
         file.write(reinterpret_cast<char*>(&inodeTarget), sb.s_inode_s);
         
-        file.flush();  // ✅ Forzar escritura
+        file.flush();
         
         std::string nuevaRuta = getParentPath(params.path) + "/" + params.name;
         registrarJournalRename(file, sb, params.path.c_str(), nuevaRuta.c_str());

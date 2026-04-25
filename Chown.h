@@ -59,12 +59,11 @@ int obtenerUIDPorNombre(std::fstream& file, const SuperBloque& sb, const std::st
     
     // Recorrer bloques del archivo users.txt
     for (int b = 0; b < 12 && usersInode.i_block[b] != -1; b++) {
-        BloqueArchivos bloque;  // ✅ Ajusta a tu struct real
+        BloqueArchivos bloque;
         file.seekg(sb.s_block_start + usersInode.i_block[b] * sb.s_block_s, std::ios::beg);
         file.read(reinterpret_cast<char*>(&bloque), sb.s_block_s);
         
-        // Parsear contenido (texto plano con formato CSV)
-        std::string contenido(bloque.b_content);  // ✅ Ajusta según tu struct
+        std::string contenido(bloque.b_content); 
         std::stringstream ss(contenido);
         std::string linea;
         
@@ -83,10 +82,9 @@ int obtenerUIDPorNombre(std::fstream& file, const SuperBloque& sb, const std::st
                 campos.push_back(campo);
             }
             
-            // Buscar usuario: campos[1]=="U" && campos[2]==nombreUsuario
             if (campos.size() >= 3 && campos[1] == "U" && trim(campos[2]) == nombreUsuario) {
                 try {
-                    return std::stoi(campos[0]);  // ✅ Retornar UID
+                    return std::stoi(campos[0]);
                 } catch (...) {
                     continue;
                 }
@@ -191,14 +189,12 @@ inline std::string Chown(const std::string& input) {
         file.seekg(particionStart, std::ios::beg);
         file.read(reinterpret_cast<char*>(&sb), sizeof(SuperBloque));
         
-        // ✅ Buscar UID usando la función implementada
         int nuevoUID = obtenerUIDPorNombre(file, sb, params.usuario); 
         if (nuevoUID == -1) {
             file.close();
             return "Error: El usuario '" + params.usuario + "' no existe";
         }
         
-        // ✅ Navegar al inodo objetivo
         int inodoTarget = buscarInodoPorRuta(file, sb, params.path, 0);
         if (inodoTarget == -1) {
             file.close();

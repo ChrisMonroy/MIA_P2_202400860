@@ -28,15 +28,11 @@ useEffect(() => {
       const state = await api.getEstado();
       setMountedIds(state.ids_montados || []);
       
-      // ✅ Solo restaurar sesión si ya había usuario Y partición específica guardada
       if (state.sesion_activa && state.usuario) {
-        // Opción A: Guardar la partición usada en localStorage al hacer login
         const lastPartition = localStorage.getItem('lastPartition');
         if (lastPartition && state.ids_montados?.includes(lastPartition)) {
           setSession({ active: true, user: state.usuario, partition: lastPartition });
         }
-        // Opción B: Si no hay partición guardada, NO auto-seleccionar
-        // El usuario debe elegir desde el visualizador
       }
     } catch (err) {
       console.error('Error verificando sesión:', err);
@@ -49,7 +45,7 @@ useEffect(() => {
 
 // Y en handleLoginSuccess, guardar la partición seleccionada:
 const handleLoginSuccess = (user: string, partition: string) => {
-  localStorage.setItem('lastPartition', partition); // ← Guardar para próxima vez
+  localStorage.setItem('lastPartition', partition);
   setSession({ active: true, user, partition });
   setView('explorer');
 };

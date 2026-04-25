@@ -87,17 +87,13 @@ bool puedeEliminarRecursivo(std::fstream& file, const SuperBloque& sb,
     file.seekg(sb.s_inode_start + inodoActual * sb.s_inode_s, std::ios::beg);
     file.read(reinterpret_cast<char*>(&inode), sb.s_inode_s);
     
-    // Verificar permiso de escritura en este inodo
     if (!checkPermission(usuario, inode, 'w')) {
         return false;
     }
-    
-    // Si es archivo, ya terminamos
+
     if (inode.i_type == '1') {
         return true;
     }
-    
-    // Si es carpeta, verificar todos sus contenidos
     for (int i = 0; i < 12 && inode.i_block[i] != -1; i++) {
         int idxBloque = inode.i_block[i];
         
@@ -340,7 +336,6 @@ inline std::string Remove(const std::string& input) {
         int inodoPadre = obtenerInodoPadre(file, sb, params.path);
         std::string nombre = obtenerNombreDeRuta(params.path);
         
-        // === REGLA CRÍTICA: DRY-RUN para carpetas ===
         if (inodeTarget.i_type == '0') {
             if (!puedeEliminarRecursivo(file, sb, inodoTarget, usuarioActual)) {
                 file.close();
@@ -351,13 +346,10 @@ inline std::string Remove(const std::string& input) {
         ResultadoEliminacion resultado = eliminarRecursivo(
             file, sb, inodoTarget, inodoPadre, nombre);
         
-        // Actualizar bitmaps y SuperBloque
         actualizarBitmaps(file, sb, resultado.inodosLiberados, resultado.bloquesLiberados);
         
-        // Registrar en Journal si es EXT3
         registrarEnJournal(file, sb, "REMOVE", params.path.c_str(), "Elemento eliminado");
 
-        // Antes de eliminar, registrar la operación:
         std::string partitionId = getSessionPartitionId();
         if (!partitionId.empty()) {
         CommandJournaling::add(

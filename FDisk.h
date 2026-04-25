@@ -139,7 +139,7 @@ int findFreeSlot(MBR& mbr, long long partitionSize, char fit, int& outStart) {
                 }
             }
         }
-    } else {  // Worst Fit - Mayor espacio disponible (default)
+    } else {  // Worst Fit - Mayor espacio disponible
         long long maxSpace = 0;
         
         for (int i = 0; i < 4; i++) {

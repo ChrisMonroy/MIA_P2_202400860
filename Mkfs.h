@@ -27,8 +27,6 @@ std::string Mkfs(const std::string& input) {
     try {
         std::string id;
         std::string type = "full";  // Por defecto
-        
-        // PARSEO DE PARÁMETROS
 
         size_t start = 0;
         while (start < input.length()) {
@@ -202,7 +200,6 @@ std::string Mkfs(const std::string& input) {
         strncpy(rootBlock.b_content[0].b_name, ".", 12);
         rootBlock.b_content[0].b_inodo = 0;  // Apunta a sí mismo
         
-        // Entrada ".." (directorio padre - en raíz es sí mismo)
         strncpy(rootBlock.b_content[1].b_name, "..", 12);
         rootBlock.b_content[1].b_inodo = 0;
         

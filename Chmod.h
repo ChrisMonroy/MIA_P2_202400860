@@ -59,13 +59,12 @@ bool validarUGO(const std::string& ugo) {
     return true;
 }
 
-// 🔍 Buscar un nombre dentro de un bloque de carpeta
+//Buscar un nombre dentro de un bloque de carpeta
 int buscarEnCarpeta(std::fstream& file, const SuperBloque& sb, int inodoId, const std::string& nombreBuscado) {
     Inodos inodoCarpeta;
     file.seekg(sb.s_inode_start + (inodoId * sb.s_inode_s), std::ios::beg);
     file.read(reinterpret_cast<char*>(&inodoCarpeta), sb.s_inode_s);
 
-    // ✅ '1' = directorio en tu sistema
     if (inodoCarpeta.i_type != '1') return -1;
 
     for (int i = 0; i < 12; i++) {
@@ -88,7 +87,7 @@ int buscarEnCarpeta(std::fstream& file, const SuperBloque& sb, int inodoId, cons
     return -1;
 }
 
-// 🗺️ Navegar por la ruta completa hasta encontrar el inodo objetivo
+//Navegar por la ruta completa hasta encontrar el inodo objetivo
 int rastrearRuta(std::fstream& file, const SuperBloque& sb, const std::string& ruta) {
     if (ruta == "/") return 0;
     
@@ -107,7 +106,7 @@ int rastrearRuta(std::fstream& file, const SuperBloque& sb, const std::string& r
     return inodoActual;
 }
 
-// 🔄 Cambiar permisos de forma recursiva (solo directorios)
+//Cambiar permisos de forma recursiva (solo directorios)
 void cambiarPermisos(std::fstream& file, const SuperBloque& sb, int inodoId, 
                      const std::string& nuevoPermiso, bool recursivo, const Usuario& usuario, int& cambios) {
     Inodos inodo;
@@ -128,7 +127,6 @@ void cambiarPermisos(std::fstream& file, const SuperBloque& sb, int inodoId,
     file.write(reinterpret_cast<char*>(&inodo), sb.s_inode_s);
     cambios++;
     
-    // ✅ Recursar SOLO si es directorio ('1') y se pidió recursividad
     if (recursivo && inodo.i_type == '1') {
         for (int i = 0; i < 12; i++) {
             if (inodo.i_block[i] != -1) {
@@ -188,7 +186,6 @@ inline std::string Chmod(const std::string& input) {
             return "Error: No hay sesión activa";
         }
         
-        // ✅ Validación robusta de root por UID (más seguro que comparar nombres)
         if (usuarioActual.uid != 1) {
             return "Error: Solo el usuario root puede ejecutar chmod";
         }

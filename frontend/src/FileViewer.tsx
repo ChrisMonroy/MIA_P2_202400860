@@ -34,7 +34,7 @@ export default function FileViewer({ partitionId, filePath, onBack }: FileViewer
     <div className="file-viewer">
       <div className="file-viewer-header">
         <button onClick={onBack} className="btn-back">← Volver</button>
-        <h4>📄 {filePath.split('/').pop()}</h4>
+        <h4> {filePath.split('/').pop()}</h4>
       </div>
       <pre className="file-content">{content || '(archivo vacío)'}</pre>
     </div>

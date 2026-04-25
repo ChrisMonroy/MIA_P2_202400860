@@ -43,11 +43,8 @@ bool addEntryToDirectory2(std::fstream& file, const SuperBloque& sb,
         return false;
     }
     
-    // Buscar bloque con espacio (primero bloque directo)
     for (int b = 0; b < 12; b++) {
         if (dirInode.i_block[b] == -1) {
-            // Necesitamos crear un nuevo bloque
-            // Buscar bloque libre en bitmap
             int newBlockIndex = -1;
             for (int i = 0; i < sb.s_blocks_count; i++) {
                 int byteIndex = i / 8;
@@ -64,17 +61,15 @@ bool addEntryToDirectory2(std::fstream& file, const SuperBloque& sb,
             }
             
             if (newBlockIndex == -1) {
-                return false; // No hay bloques libres
+                return false;
             }
             
-            // Crear nuevo bloque de directorio
             BloqueCarpeta newBlock;
             memset(&newBlock, 0, sizeof(BloqueCarpeta));
             for (int i = 0; i < 4; i++) {
                 newBlock.b_content[i].b_inodo = -1;
             }
             
-            // Agregar entrada en este nuevo bloque
             strncpy(newBlock.b_content[0].b_name, name.c_str(), 12);
             newBlock.b_content[0].b_inodo = newInodeIndex;
             
@@ -90,18 +85,15 @@ bool addEntryToDirectory2(std::fstream& file, const SuperBloque& sb,
             return true;
         }
         
-        // Bloque ya existe, verificar si tiene espacio
         BloqueCarpeta block;
         file.seekg(sb.s_block_start + dirInode.i_block[b] * sizeof(BloqueCarpeta), std::ios::beg);
         file.read(reinterpret_cast<char*>(&block), sizeof(BloqueCarpeta));
         
         int slot = findFreeSlot(block);
         if (slot != -1) {
-            // Hay espacio, agregar entrada
             strncpy(block.b_content[slot].b_name, name.c_str(), 12);
             block.b_content[slot].b_inodo = newInodeIndex;
             
-            // Escribir bloque actualizado
             file.seekp(sb.s_block_start + dirInode.i_block[b] * sizeof(BloqueCarpeta), std::ios::beg);
             file.write(reinterpret_cast<char*>(&block), sizeof(BloqueCarpeta));
             
@@ -109,7 +101,7 @@ bool addEntryToDirectory2(std::fstream& file, const SuperBloque& sb,
         }
     }
     
-    return false; // Todos los bloques están llenos
+    return false;
 }
 
 std::string Mkdir(const std::string& input) {
@@ -350,11 +342,9 @@ std::string Mkdir(const std::string& input) {
                 newDirBlock.b_content[j].b_inodo = -1;
             }
             
-            // Entrada "." (apunta a sí misma)
             strncpy(newDirBlock.b_content[0].b_name, ".", 12);
             newDirBlock.b_content[0].b_inodo = freeInodeIndex;
             
-            // Entrada ".." (apunta al padre)
             strncpy(newDirBlock.b_content[1].b_name, "..", 12);
             newDirBlock.b_content[1].b_inodo = currentInodeIndex;
             
@@ -372,7 +362,6 @@ std::string Mkdir(const std::string& input) {
                 return "Error: No se pudo agregar entrada al directorio padre";
             }
 
-            //Actualiza el super bloque (Sino se queda y no aumenta el contador)
             sb.s_free_inodes_count--;
             sb.s_free_blocks_count--;
             sb.s_mtime = time(nullptr);
@@ -381,7 +370,7 @@ std::string Mkdir(const std::string& input) {
 
             lastCreatedInode = freeInodeIndex;
             lastCreatedBlock = freeBlockIndex;
-            currentInodeIndex = freeInodeIndex;  // Moverse al nuevo directorio
+            currentInodeIndex = freeInodeIndex;
         }
 
         file.close();

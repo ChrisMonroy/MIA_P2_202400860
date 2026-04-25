@@ -11,12 +11,6 @@
 #include "Mount.h"
 #include "globals.h"
 
-//Variables globales
-extern bool is_logged;
-extern char current_user[16];
-extern std::vector<MountedPartition> mounted_list;
-extern int mounted_count;
-
 //Comando
 std::string Mounted() {
     try {

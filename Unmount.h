@@ -81,7 +81,6 @@ std::string Unmount(const std::string& input) {
         }
         // Si es partición lógica: actualizar en EBR
         else if (target->type == 'L') {
-            // Buscar el EBR que contiene esta partición lógica
             Partition& extPart = mbr.mbr_partitions[target->partition_index];
             long ebrPos = extPart.part_start;
             

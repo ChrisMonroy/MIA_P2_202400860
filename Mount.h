@@ -15,12 +15,6 @@
 #include "globals.h"
 #include "utils.h"
 
-extern std::vector<MountedPartition> mounted_list;
-extern int mounted_count;
-extern char current_user[16];
-extern bool is_logged;
-
-// Mapa para tracking de discos: ruta -> (letra, último número de partición)
 extern std::map<std::string, std::pair<char, int>> diskTracking;
 extern char nextDiskLetter;
 
@@ -236,12 +230,10 @@ std::string Mount(const std::string& input) {
             }
         }
         
-        // Actualizar MBR en disco (status = '1', correlativo)
         if (!updateMBR(fullPath, partitionIndex, '1', correlative)) {
             return "Error: No se pudo actualizar el MBR";
         }
         
-        // Agregar a lista de montadas en memoria
         MountedPartition mp;
         mp.id = mountID;
         mp.path = fullPath;
@@ -277,7 +269,6 @@ std::string getCurrentSessionId() {
     if (!is_logged || mounted_list.empty()) {
         return "";
     }
-    // Retornar el ID de la partición donde se hizo login
     return mounted_list[0].id;
 }
 
